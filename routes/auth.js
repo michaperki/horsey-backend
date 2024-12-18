@@ -1,0 +1,33 @@
+// src/routes/auth.js
+const express = require('express');
+const passport = require('passport');
+const router = express.Router();
+
+// Configure OAuth Strategy
+const OAuth2Strategy = require('passport-oauth2').Strategy;
+
+passport.use(new OAuth2Strategy({
+    authorizationURL: 'https://provider.com/oauth2/authorize',
+    tokenURL: 'https://provider.com/oauth2/token',
+    clientID: process.env.OAUTH_CLIENT_ID,
+    clientSecret: process.env.OAUTH_CLIENT_SECRET,
+    callbackURL: process.env.OAUTH_CALLBACK_URL
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    // TODO: Find or create user in your database
+    return cb(null, profile);
+  }
+));
+
+// Routes
+router.get('/login', passport.authenticate('oauth2'));
+
+router.get('/callback', 
+  passport.authenticate('oauth2', { failureRedirect: '/' }),
+  (req, res) => {
+    // Successful authentication, redirect home.
+    res.redirect('/');
+  }
+);
+
+module.exports = router;
