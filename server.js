@@ -19,7 +19,10 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // Frontend URL
+  credentials: true, // Allow cookies to be sent
+}));
 app.use(express.json());
 
 // Routes
