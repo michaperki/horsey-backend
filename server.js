@@ -3,13 +3,14 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const passport = require('passport');
 const connectDB = require('./config/db'); // Import the DB connection
-const authRoutes = require('./routes/auth');
+const adminAuthRoutes = require('./routes/adminAuth');
+const userAuthRoutes = require('./routes/userAuth');
 const paymentsRoutes = require('./routes/payments');
 const lichessRoutes = require('./routes/lichess');
 const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes'); // New Bet routes
+const testEmailRoutes = require('./routes/testEmail'); // Import the test route
 
 // Initialize Express app
 const app = express();
@@ -21,16 +22,14 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 
-// Initialize Passport
-app.use(passport.initialize());
-require('./config/passport')(passport);
-
 // Routes
-app.use('/auth', authRoutes);
+app.use('/auth', userAuthRoutes);
+app.use('/adminAuth', adminAuthRoutes);
 app.use('/payments', paymentsRoutes);
 app.use('/lichess', lichessRoutes);
 app.use('/tokens', tokenRoutes);
-app.use('/bets', betRoutes); // Use Bet routes
+app.use('/bets', betRoutes);
+app.use('/test-email', testEmailRoutes); // Mount the test route
 
 // Placeholder route
 app.get('/', (req, res) => {

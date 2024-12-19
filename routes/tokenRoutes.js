@@ -3,12 +3,12 @@
 const express = require("express");
 const router = express.Router();
 const tokenService = require("../services/tokenService");
-const { authenticateToken, authorizeAdmin } = require("../middleware/authMiddleware");
+const { authenticateToken, authorizeRole } = require("../middleware/authMiddleware");
 const Bet = require('../models/Bet');
 const User = require('../models/User');
 
 // Route to mint tokens (Admin Only)
-router.post("/mint", authenticateToken, authorizeAdmin, async (req, res) => {
+router.post("/mint", authenticateToken, authorizeRole('admin'), async (req, res) => {
   const { toAddress, amount } = req.body;
 
   if (!toAddress || !amount) {
@@ -31,7 +31,7 @@ router.post("/mint", authenticateToken, authorizeAdmin, async (req, res) => {
 });
 
 // Route to get token balance by address (Admin Only)
-router.get("/balance/:address", authenticateToken, authorizeAdmin, async (req, res) => {
+router.get("/balance/:address", authenticateToken, authorizeRole('admin'), async (req, res) => {
   const { address } = req.params;
 
   try {
@@ -67,4 +67,3 @@ router.get("/balance/user", authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -1,4 +1,3 @@
-
 // backend/models/User.js
 const mongoose = require('mongoose');
 
@@ -8,21 +7,38 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      trim: true,
     },
     email: {
       type: String,
       required: true,
       unique: true,
+      lowercase: true,
+      trim: true,
     },
     password: {
       type: String,
-      required: true,
+      required: true, // Required for both users and admins
+    },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
     },
     balance: {
       type: Number,
-      default: 1000, // Default starting balance, adjust as needed
+      default: 1000, // Starting balance for users
     },
-    // Add other fields as necessary
+    notificationPreferences: {
+      email: {
+        type: Boolean,
+        default: true,
+      },
+      inApp: {
+        type: Boolean,
+        default: true,
+      },
+    },
   },
   { timestamps: true }
 );
