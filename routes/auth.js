@@ -35,19 +35,21 @@ router.get(
   },
 );
 
-// Admin Login Route (Simplified)
+// Admin Login Route (Secure)
 router.post("/admin-login", (req, res) => {
   const { username, password } = req.body;
 
-  // TODO: Implement proper authentication (e.g., check against a database)
-  if (username === "admin" && password === "password") {
-    // Replace with secure checks
+  // Fetch admin credentials from environment variables
+  const adminUsername = process.env.ADMIN_USERNAME;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (username === adminUsername && password === adminPassword) {
     const token = jwt.sign(
       { username: "admin", role: "admin" },
       process.env.JWT_SECRET,
       {
         expiresIn: "1h",
-      },
+      }
     );
     return res.json({ token });
   } else {
