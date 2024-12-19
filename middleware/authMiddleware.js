@@ -1,8 +1,11 @@
+
 // backend/middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
+
+  // Expecting format "Bearer <token>"
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) {

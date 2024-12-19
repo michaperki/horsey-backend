@@ -4,6 +4,8 @@ const express = require("express");
 const router = express.Router();
 const tokenService = require("../services/tokenService");
 const { authenticateToken, authorizeAdmin } = require("../middleware/authMiddleware");
+const Bet = require('../models/Bet');
+const User = require('../models/User');
 
 // Route to mint tokens (Admin Only)
 router.post("/mint", authenticateToken, authorizeAdmin, async (req, res) => {
@@ -13,44 +15,56 @@ router.post("/mint", authenticateToken, authorizeAdmin, async (req, res) => {
     return res.status(400).json({ error: "toAddress and amount are required" });
   }
 
-  const result = await tokenService.mintTokens(toAddress, amount);
+  try {
+    const result = await tokenService.mintTokens(toAddress, amount);
 
-  if (result.success) {
-    res.json({ message: "Tokens minted successfully", txHash: result.txHash });
-  } else {
-    res.status(500).json({ error: result.error });
+    if (result.success) {
+      // Optionally, record the minting action in the database
+      res.json({ message: "Tokens minted successfully", txHash: result.txHash });
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error minting tokens:', error.message);
+    res.status(500).json({ error: 'Server error while minting tokens' });
   }
 });
 
-// Route to get token balance
+// Route to get token balance by address (Admin Only)
 router.get("/balance/:address", authenticateToken, authorizeAdmin, async (req, res) => {
   const { address } = req.params;
 
-  const result = await tokenService.getBalance(address);
+  try {
+    const result = await tokenService.getBalance(address);
 
-  if (result.success) {
-    res.json({ address, balance: result.balance });
-  } else {
-    res.status(500).json({ error: result.error });
+    if (result.success) {
+      res.json({ address, balance: result.balance });
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error fetching balance:', error.message);
+    res.status(500).json({ error: 'Server error while fetching balance' });
   }
 });
 
-// Route to transfer tokens (Admin Only)
-router.post("/transfer", authenticateToken, authorizeAdmin, async (req, res) => {
-  const { fromAddress, toAddress, amount } = req.body;
-
-  if (!fromAddress || !toAddress || !amount) {
-    return res.status(400).json({ error: "fromAddress, toAddress, and amount are required" });
-  }
+// New Route to get current user's balance
+router.get("/balance/user", authenticateToken, async (req, res) => {
+  const userId = req.user.id;
 
   try {
-    const tx = await tokenService.transferTokens(fromAddress, toAddress, amount);
-    await tx.wait();
-    res.json({ message: "Tokens transferred successfully", txHash: tx.hash });
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ balance: user.balance });
   } catch (error) {
-    console.error("Error transferring tokens:", error);
-    res.status(500).json({ error: error.message });
+    console.error('Error fetching user balance:', error.message);
+    res.status(500).json({ error: 'Server error while fetching balance' });
   }
 });
 
 module.exports = router;
+
