@@ -1,3 +1,4 @@
+
 // backend/services/emailService.js
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
@@ -12,12 +13,19 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Function to log messages based on environment
+const log = (message) => {
+  if (process.env.NODE_ENV !== 'test') {
+    console.log(message);
+  }
+};
+
 // Verify the transporter configuration
 transporter.verify((error, success) => {
   if (error) {
     console.error('Email transporter configuration error:', error);
   } else {
-    console.log('Email transporter is ready to send messages');
+    log('Email transporter is ready to send messages');
   }
 });
 
@@ -40,7 +48,7 @@ const sendEmail = async (to, subject, text, html = null) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${to}: ${info.response}`);
+    log(`Email sent to ${to}: ${info.response}`);
     return { success: true, info };
   } catch (error) {
     console.error(`Error sending email to ${to}:`, error);
@@ -49,3 +57,4 @@ const sendEmail = async (to, subject, text, html = null) => {
 };
 
 module.exports = { sendEmail };
+
