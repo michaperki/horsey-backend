@@ -1,27 +1,20 @@
+
 // backend/routes/payments.js
 const express = require('express');
 const router = express.Router();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { ethers } = require('ethers');
 
-// Create a payment intent
+// Mock Stripe payment intent
 router.post('/stripe', async (req, res) => {
   const { amount, currency } = req.body;
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency,
-    });
-    res.send({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    res.status(500).send({ error: error.message });
-  }
+  // Simulate a successful payment intent
+  res.send({ clientSecret: 'mock_client_secret' });
 });
 
-// Placeholder for Crypto transactions
+// Mock Crypto transaction
 router.post("/crypto", async (req, res) => {
-  // Implement crypto transaction logic here
-  res.send("Crypto payment endpoint");
+  // Simulate a successful crypto transaction
+  res.send({ transactionId: 'mock_transaction_id' });
 });
 
 module.exports = router;
+
