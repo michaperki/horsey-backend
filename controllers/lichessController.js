@@ -1,10 +1,10 @@
 // backend/controllers/lichessController.js
-const Bet = require('../models/Bet'); // Assuming you have a Bet model
-const User = require('../models/User');
-const { sendEmail } = require('../services/emailService');
-const tokenService = require('../services/tokenService'); // Assuming you have a tokenService
 
-// Handler for validating game results
+const { getGameOutcome } = require('../services/lichessService');
+const Bet = require('../models/Bet');
+const tokenService = require('../services/tokenService');
+const { sendEmail } = require('../services/emailService');
+
 const validateResultHandler = async (req, res) => {
   const { gameId } = req.body;
 
@@ -13,58 +13,45 @@ const validateResultHandler = async (req, res) => {
   }
 
   try {
-    // Implement your logic to get the game outcome
-    const gameResult = await getGameOutcome(gameId); // You need to define this function
+    // Fetch the game outcome
+    const gameResult = await getGameOutcome(gameId);
     if (!gameResult.success) {
       return res.status(500).json({ error: gameResult.error });
     }
 
     const { outcome } = gameResult;
 
-    // Find all pending bets for the game
-    const bets = await Bet.find({ gameId, status: 'pending' });
+    // Find all pending bets for the game and populate user data
+    const bets = await Bet.find({ gameId, status: 'pending' }).populate('userId', 'email username');
 
     if (!bets.length) {
       return res.status(404).json({ error: 'No pending bets found for this game' });
     }
 
-    // Process each bet based on the outcome
+    // Process bets...
+    const rewardPerWinner = 10; // Define your reward logic here (e.g., fixed amount, percentage)
+
     for (const bet of bets) {
       if (bet.choice === outcome) {
-        // Winner logic
-        const payout = 10; // Define your payout logic
-        const mintResult = await tokenService.mintTokens(bet.userId, payout);
-
+        // Winner: Attempt to mint tokens and send email
+        const mintResult = await tokenService.mintTokens(bet.userId._id, rewardPerWinner);
         if (mintResult.success) {
-          bet.status = 'won';
-          await bet.save();
-
-          // Send email notification
-          const user = await User.findById(bet.userId);
-          if (user && user.notificationPreferences.email) {
-            await sendEmail(
-              user.email,
-              'Bet Won!',
-              `Congratulations ${user.username}! You won ${payout} PTK on game ${gameId}.`
-            );
-          }
+          await sendEmail(
+            bet.userId.email,
+            'Bet Won!',
+            `Congratulations ${bet.userId.username}! You won ${rewardPerWinner} PTK on game ${gameId}.`
+          );
         } else {
-          console.error(`Failed to mint tokens for user ${bet.userId}: ${mintResult.error}`);
+          console.error(`Failed to mint tokens for user ${bet.userId._id}: ${mintResult.error}`);
+          // Optionally, handle the failure (e.g., retry, notify admin)
         }
+        // **Always** mark the bet as 'won' regardless of minting success
+        bet.status = 'won';
+        await bet.save();
       } else {
-        // Loser logic
+        // Loser: Update bet status
         bet.status = 'lost';
         await bet.save();
-
-        // Send email notification
-        const user = await User.findById(bet.userId);
-        if (user && user.notificationPreferences.email) {
-          await sendEmail(
-            user.email,
-            'Bet Lost',
-            `Sorry ${user.username}, you lost your bet of ${bet.amount} PTK on game ${gameId}. Better luck next time!`
-          );
-        }
       }
     }
 
@@ -75,17 +62,4 @@ const validateResultHandler = async (req, res) => {
   }
 };
 
-const getGameOutcome = async (gameId) => {
-  // Implement the logic to fetch game outcome
-  // This is a placeholder function
-  // Return an object like { success: true, outcome: 'white' }
-  try {
-    // Fetch game data from Lichess API or your database
-    const outcome = 'white'; // Example outcome
-    return { success: true, outcome };
-  } catch (error) {
-    return { success: false, error: 'Failed to fetch game outcome' };
-  }
-};
-
-module.exports = { validateResultHandler, getGameOutcome };
+module.exports = { validateResultHandler };

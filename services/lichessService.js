@@ -1,4 +1,3 @@
-
 // backend/services/lichessService.js
 const axios = require('axios');
 
@@ -39,7 +38,7 @@ const getGameOutcome = async (gameId) => {
     console.error(`Error fetching game outcome for Game ID ${gameId}:`, error.message);
     return {
       success: false,
-      error: error.message,
+      error: error.response ? error.response.data : error.message,
     };
   }
 };
