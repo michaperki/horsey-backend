@@ -2,6 +2,7 @@
 module.exports = {
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/tests/setupTests.js'],
+  modulePathIgnorePatterns: ['<rootDir>/tests/__mocks__'], // Ensure mocks are not treated as modules
   collectCoverage: true,
   collectCoverageFrom: [
     "controllers/**/*.js",
