@@ -1,9 +1,7 @@
 
-// backend/server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-// const passport = require('passport'); // Uncomment if using Passport
 const connectDB = require('./config/db');
 const adminAuthRoutes = require('./routes/adminAuth');
 const userAuthRoutes = require('./routes/userAuth');
@@ -19,16 +17,25 @@ if (process.env.NODE_ENV !== 'test') {
   connectDB();
 }
 
+// Allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',         // Local development
+  'https://horsey-chess.netlify.app' // Production frontend
+];
+
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:3000', // Adjust based on frontend URL
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, Postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true, // Allow cookies to be sent
 }));
 app.use(express.json());
-
-// Initialize Passport (if used)
-// app.use(passport.initialize());
-// require('./config/passport')(passport);
 
 // Routes
 app.use('/auth/user', userAuthRoutes);
