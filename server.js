@@ -8,6 +8,7 @@ const paymentsRoutes = require('./routes/payments');
 const lichessRoutes = require('./routes/lichess');
 const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes');
+const testEmailRoutes = require('./routes/testEmail');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/payments', paymentsRoutes);
 app.use('/lichess', lichessRoutes);
 app.use('/tokens', tokenRoutes);
 app.use('/bets', betRoutes);
+app.use('/email', testEmailRoutes);
 
 // Placeholder route
 app.get('/', (req, res) => {
