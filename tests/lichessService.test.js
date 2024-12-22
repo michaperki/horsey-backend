@@ -5,18 +5,6 @@ const axios = require('axios');
 jest.mock('axios');
 
 describe('Lichess Service - getGameOutcome', () => {
-  let consoleErrorMock;
-
-  beforeEach(() => {
-    // Mock console.error before each test
-    consoleErrorMock = jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    // Restore console.error after each test
-    consoleErrorMock.mockRestore();
-  });
-
   it('should return the correct outcome for a valid game', async () => {
     axios.get.mockResolvedValue({
       data: {
@@ -40,7 +28,7 @@ describe('Lichess Service - getGameOutcome', () => {
     });
 
     // Ensure console.error was not called
-    expect(consoleErrorMock).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it('should handle API errors gracefully', async () => {
@@ -52,8 +40,8 @@ describe('Lichess Service - getGameOutcome', () => {
     expect(result.error).toBe('Network Error');
 
     // Ensure console.error was called with the correct message
-    expect(consoleErrorMock).toHaveBeenCalledWith(
-      'Error fetching game outcome for Game ID game123:',
+    expect(console.error).toHaveBeenCalledWith(
+      `Error fetching game outcome for Game ID game123:`,
       'Network Error'
     );
   });
@@ -67,8 +55,8 @@ describe('Lichess Service - getGameOutcome', () => {
     expect(result.error).toBe('Invalid game data received from Lichess.');
 
     // Ensure console.error was called with the correct message
-    expect(consoleErrorMock).toHaveBeenCalledWith(
-      'Error fetching game outcome for Game ID game123:',
+    expect(console.error).toHaveBeenCalledWith(
+      `Error fetching game outcome for Game ID game123:`,
       'Invalid game data received from Lichess.'
     );
   });

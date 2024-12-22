@@ -1,6 +1,5 @@
+const ethers = require("ethers"); // Import the entire ethers object
 
-// backend/services/tokenService.js
-const { ethers, JsonRpcProvider } = require("ethers");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
@@ -11,7 +10,7 @@ const promoTokenABI = JSON.parse(
 ).abi;
 
 // Initialize provider and signer
-const provider = new JsonRpcProvider(process.env.POLYGON_RPC_URL);
+const provider = new ethers.JsonRpcProvider(process.env.POLYGON_RPC_URL);
 const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
 // Initialize contract instance
@@ -27,7 +26,7 @@ module.exports = {
     try {
       const tx = await promoTokenContract.mint(
         toAddress,
-        ethers.parseUnits(amount.toString(), 18)
+        ethers.parseUnits(amount.toString(), 18) // Updated for v6
       );
       await tx.wait();
       return { success: true, txHash: tx.hash };
@@ -40,21 +39,19 @@ module.exports = {
   getBalance: async (address) => {
     try {
       const balance = await promoTokenContract.balanceOf(address);
-      return { success: true, balance: ethers.formatUnits(balance, 18) };
+      return { success: true, balance: ethers.formatUnits(balance, 18) }; // Updated for v6
     } catch (error) {
       console.error("Error fetching balance:", error);
       return { success: false, error: error.message };
     }
   },
+  
   transferTokens: async (fromAddress, toAddress, amount) => {
     try {
-      // Assuming the signer has control over fromAddress
-      // In reality, transferring from another address requires prior approval
-
       const tx = await promoTokenContract.transferFrom(
         fromAddress,
         toAddress,
-        ethers.utils.parseUnits(amount.toString(), 18)
+        ethers.parseUnits(amount.toString(), 18) // Updated for v6
       );
       await tx.wait();
       return { success: true, txHash: tx.hash };
