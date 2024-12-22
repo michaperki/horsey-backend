@@ -8,15 +8,9 @@ const mongoose = require('mongoose');
 const { connect, closeDatabase, clearDatabase } = require('./setup');
 
 // Mock console.error globally before any tests run
-beforeAll(() => {
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-});
-
-// Establish database connection before all tests
 beforeAll(async () => {
-  if (mongoose.connection.readyState === 0) {
-    await connect();
-  }
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  await connect();
 });
 
 // Clear database after each test to ensure test isolation
@@ -28,7 +22,7 @@ afterEach(async () => {
 // Close database connection after all tests
 afterAll(async () => {
   await closeDatabase();
-  
+
   // Restore console.error to its original implementation
   if (console.error.mockRestore) {
     console.error.mockRestore();

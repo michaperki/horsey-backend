@@ -1,8 +1,7 @@
-
+// backend/server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const connectDB = require('./config/db');
 const adminAuthRoutes = require('./routes/adminAuth');
 const userAuthRoutes = require('./routes/userAuth');
 const paymentsRoutes = require('./routes/payments');
@@ -12,15 +11,10 @@ const betRoutes = require('./routes/betRoutes');
 
 const app = express();
 
-// Connect to MongoDB only if not in test environment
-if (process.env.NODE_ENV !== 'test') {
-  connectDB();
-}
-
 // Allowed origins
 const allowedOrigins = [
-  'http://localhost:3000',         // Local development
-  'https://horsey-chess.netlify.app' // Production frontend
+  'http://localhost:3000',                   // Local development
+  'https://horsey-chess.netlify.app',        // Production frontend
 ];
 
 // Middleware
@@ -50,13 +44,4 @@ app.get('/', (req, res) => {
   res.send('Chess Betting Backend is running');
 });
 
-// Start the server only if not in test environment
-if (process.env.NODE_ENV !== 'test') {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Backend server is running on port ${PORT}`);
-  });
-}
-
 module.exports = app; // Export the app for testing
-
