@@ -1,4 +1,3 @@
-// backend/.prettierrc or frontend/.prettierrc
 {
   "semi": true,
   "singleQuote": true,
