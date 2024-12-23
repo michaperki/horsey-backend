@@ -19,13 +19,12 @@ const isGameOpenForBetting = async (gameId) => {
 
     const gameData = response.data;
 
-    // If game has already started or concluded, betting should be closed
-    if (gameData.status !== 'created') { // 'created' implies scheduled
+    console.log(gameData.status);
+
+    // Allow betting for 'created' or 'started' games
+    if (gameData.status !== 'created' && gameData.status !== 'started') {
       return false;
     }
-
-    // Optional: Implement cutoff time logic if available
-    // For simplicity, we'll assume 'created' status means betting is open
 
     return true;
   } catch (error) {
