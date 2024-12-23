@@ -8,10 +8,10 @@ const User = require('../models/User');
 
 jest.mock('../services/emailService'); // Uses __mocks__/emailService.js
 
-describe('POST /auth/user/register', () => {
+describe('POST /auth/register', () => {
   it('should register a new user', async () => {
     const res = await request(app)
-      .post('/auth/user/register')
+      .post('/auth/register')
       .send({
         username: 'testuser',
         email: 'testuser@example.com',
@@ -30,7 +30,7 @@ describe('POST /auth/user/register', () => {
   it('should not register a user with existing email', async () => {
     // First registration
     await request(app)
-      .post('/auth/user/register')
+      .post('/auth/register')
       .send({
         username: 'user1',
         email: 'duplicate@example.com',
@@ -39,7 +39,7 @@ describe('POST /auth/user/register', () => {
 
     // Attempt duplicate registration
     const res = await request(app)
-      .post('/auth/user/register')
+      .post('/auth/register')
       .send({
         username: 'user2',
         email: 'duplicate@example.com',
@@ -52,7 +52,7 @@ describe('POST /auth/user/register', () => {
 
   it('should not register a user with missing fields', async () => {
     const res = await request(app)
-      .post('/auth/user/register')
+      .post('/auth/register')
       .send({
         email: 'incomplete@example.com',
         password: 'password123',
@@ -63,7 +63,7 @@ describe('POST /auth/user/register', () => {
   });
 });
 
-describe('POST /auth/user/login', () => {
+describe('POST /auth/login', () => {
   beforeEach(async () => {
     const hashedPassword = await bcrypt.hash('password123', 10);
     await User.create({
@@ -75,7 +75,7 @@ describe('POST /auth/user/login', () => {
 
   it('should login an existing user', async () => {
     const res = await request(app)
-      .post('/auth/user/login')
+      .post('/auth/login')
       .send({
         email: 'loginuser@example.com',
         password: 'password123',
@@ -93,7 +93,7 @@ describe('POST /auth/user/login', () => {
 
   it('should not login with incorrect password', async () => {
     const res = await request(app)
-      .post('/auth/user/login')
+      .post('/auth/login')
       .send({
         email: 'loginuser@example.com',
         password: 'wrongpassword',
@@ -105,7 +105,7 @@ describe('POST /auth/user/login', () => {
 
   it('should not login a non-existent user', async () => {
     const res = await request(app)
-      .post('/auth/user/login')
+      .post('/auth/login')
       .send({
         email: 'nonexistent@example.com',
         password: 'password123',
@@ -117,7 +117,7 @@ describe('POST /auth/user/login', () => {
 
   it('should not login with missing fields', async () => {
     const res = await request(app)
-      .post('/auth/user/login')
+      .post('/auth/login')
       .send({
         email: 'loginuser@example.com',
       });
