@@ -20,14 +20,16 @@ const log = (message) => {
   }
 };
 
-// Verify the transporter configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email transporter configuration error:', error);
-  } else {
-    log('Email transporter is ready to send messages');
-  }
-});
+// Verify the transporter configuration only if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('Email transporter configuration error:', error);
+    } else {
+      log('Email transporter is ready to send messages');
+    }
+  });
+}
 
 /**
  * Sends an email.

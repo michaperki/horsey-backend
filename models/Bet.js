@@ -8,10 +8,12 @@ const BetSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+      index: true, // Add index for faster queries
     },
     gameId: {
       type: String,
       required: true,
+      index: true, // Add index if frequently queried
     },
     choice: {
       type: String,
@@ -27,10 +29,14 @@ const BetSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'won', 'lost'],
       default: 'pending',
+      index: true, // Add index if frequently filtered
     },
   },
   { timestamps: true }
 );
+
+// Compound index for userId and createdAt to optimize sorting and filtering
+BetSchema.index({ userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Bet', BetSchema);
 

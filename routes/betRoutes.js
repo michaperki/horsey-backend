@@ -6,6 +6,7 @@ const Bet = require('../models/Bet');
 const User = require('../models/User'); // Assuming a User model exists
 const { authenticateToken } = require('../middleware/authMiddleware');
 const axios = require('axios'); // To verify gameId with Lichess API
+const { getBetHistory } = require('../controllers/betController');
 
 // Helper function to check if a game is valid and open for betting
 const isGameOpenForBetting = async (gameId) => {
@@ -92,6 +93,9 @@ router.post('/place', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error while placing bet' });
   }
 });
+
+// GET /bets/history
+router.get('/history', authenticateToken, getBetHistory);
 
 module.exports = router;
 
