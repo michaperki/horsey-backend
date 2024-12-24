@@ -33,6 +33,9 @@ jobs:
         with:
           node-version: 18
 
+      - name: Copy .env.development to .env
+        run: cp .env.development .env
+
       - name: Install Dependencies
         run: npm install
 
@@ -52,3 +55,4 @@ jobs:
 
       - name: Check Formatting
         run: npm run format -- --check
+
