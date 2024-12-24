@@ -1,4 +1,4 @@
-// backend/server.js require('dotenv').config();
+// backend/server.js 
 const express = require('express');
 const cors = require('cors');
 const adminAuthRoutes = require('./routes/adminAuth');

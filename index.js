@@ -6,6 +6,13 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+// Log the environment variables (you can selectively log specific ones if needed)
+console.log('Environment Variables:', {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT,
+  MOCK_LICHESS: process.env.MOCK_LICHESS,
+});
+
 // Connect to MongoDB only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
   connectDB()

@@ -1,9 +1,8 @@
 
 // backend/tests/betRoutes.test.js
-jest.mock('axios'); // Must be called before importing axios or any module that uses it
+jest.mock('../services/lichessService'); // Mock lichessService
 jest.mock('../services/emailService'); // Uses __mocks__/emailService.js
 
-const axios = require('axios');
 const request = require('supertest');
 const app = require('../server'); // Import the Express app
 const mongoose = require('mongoose');
@@ -11,6 +10,9 @@ const User = require('../models/User');
 const Bet = require('../models/Bet');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+
+// Mock the lichessService
+const { getGameOutcome } = require('../services/lichessService');
 
 // Mock the email service
 const emailService = require('../services/emailService');
@@ -20,6 +22,14 @@ describe('POST /bets/place', () => {
   let userPayload; // Define userPayload in the outer scope
 
   beforeAll(async () => {
+    // Connect to the in-memory MongoDB instance if not already connected
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+      });
+    }
+
     // Create a user and obtain a token
     const hashedPassword = await bcrypt.hash('password123', 10);
     const user = await User.create({
@@ -36,14 +46,22 @@ describe('POST /bets/place', () => {
 
     userToken = jwt.sign(userPayload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    // Mock the axios.get call for game verification
-    axios.get.mockImplementation((url) => {
-      if (url.includes('game123')) {
-        // Simulate a successful game verification
-        return Promise.resolve({ status: 200, data: { gameId: 'game123', status: 'created' } });
+    // Mock the getGameOutcome function for 'game123'
+    getGameOutcome.mockImplementation(async (gameId) => {
+      if (gameId === 'game123') {
+        return {
+          success: true,
+          outcome: 'white',
+          white: 'MockedWhitePlayer',
+          black: 'MockedBlackPlayer',
+          status: 'created', // Allow betting
+        };
       }
-      // Simulate a 404 for other gameIds
-      return Promise.reject({ response: { status: 404, data: 'Game not found' } });
+      // Simulate a failure for other gameIds
+      return {
+        success: false,
+        error: 'Game not found',
+      };
     });
   });
 
@@ -53,7 +71,8 @@ describe('POST /bets/place', () => {
   });
 
   afterAll(async () => {
-    // No need to drop the database here as setupTests.js handles it
+    await User.deleteMany({});
+    await mongoose.connection.close();
   });
 
   it('should place a new bet for an authenticated user', async () => {
@@ -105,3 +124,4 @@ describe('POST /bets/place', () => {
     expect(res.body).toHaveProperty('error', 'gameId, choice, and amount are required');
   });
 });
+

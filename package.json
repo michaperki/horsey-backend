@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon server.js",
+    "dev": "dotenv -e .env.test nodemon index.js",
+    "test:cypress": "dotenv -e .env.cypress nodemon index.js",
     "test": "jest --forceExit --detectOpenHandles",
     "lint": "eslint .",
     "format": "prettier --write ."
@@ -28,6 +29,7 @@
     "stripe": "^17.4.0"
   },
   "devDependencies": {
+    "dotenv-cli": "^8.0.0",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",

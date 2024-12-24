@@ -5,31 +5,29 @@ const router = express.Router();
 const Bet = require('../models/Bet');
 const User = require('../models/User'); // Assuming a User model exists
 const { authenticateToken } = require('../middleware/authMiddleware');
-const axios = require('axios'); // To verify gameId with Lichess API
 const { getBetHistory } = require('../controllers/betController');
+const { getGameOutcome } = require('../services/lichessService'); // Import the service
 
 // Helper function to check if a game is valid and open for betting
 const isGameOpenForBetting = async (gameId) => {
   try {
-    const url = `https://lichess.org/game/export/${gameId}?pgnInJson=true`;
-    const response = await axios.get(url, {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    const gameOutcome = await getGameOutcome(gameId);
 
-    const gameData = response.data;
+    if (!gameOutcome.success) {
+      console.error(`Failed to retrieve game outcome for Game ID ${gameId}:`, gameOutcome.error);
+      return false;
+    }
 
-    console.log(gameData.status);
+    const { status } = gameOutcome;
 
     // Allow betting for 'created' or 'started' games
-    if (gameData.status !== 'created' && gameData.status !== 'started') {
+    if (!['created', 'started'].includes(status)) {
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error(`Error verifying gameId ${gameId}:`, error.message);
+    console.error(`Error in isGameOpenForBetting for Game ID ${gameId}:`, error.message);
     return false;
   }
 };
