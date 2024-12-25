@@ -6,7 +6,7 @@ const router = express.Router();
 const Bet = require('../models/Bet');
 const User = require('../models/User'); // Assuming a User model exists
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { getAvailableSeekers, getBetHistory } = require('../controllers/betController');
+const { getAvailableSeekers, getBetHistory, getUserBets } = require('../controllers/betController');
 const { getGameOutcome } = require('../services/lichessService'); // Import the service
 
 // Helper function to check if a game is valid and open for betting
@@ -149,6 +149,9 @@ router.get('/history', authenticateToken, getBetHistory);
 
 // GET /bets/seekers
 router.get('/seekers', authenticateToken, getAvailableSeekers);
+
+// GET /bets/your-bets
+router.get('/your-bets', authenticateToken, getUserBets);
 
 module.exports = router;
 
