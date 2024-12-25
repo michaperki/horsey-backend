@@ -4,7 +4,6 @@ process.env.NODE_ENV = 'test';
 
 require('dotenv').config({ path: '.env.test' });
 
-const mongoose = require('mongoose');
 const { connect, closeDatabase, clearDatabase } = require('./setup');
 
 // Mock console.error globally before any tests run

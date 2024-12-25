@@ -41,4 +41,29 @@ const getBetHistory = async (req, res) => {
   }
 };
 
-module.exports = { getBetHistory };
+/**
+ * Retrieves all available game seekers (pending bets).
+ */
+const getAvailableSeekers = async (req, res) => {
+  try {
+    // Fetch all pending bets
+    const pendingBets = await Bet.find({ status: 'pending' }).populate('userId', 'username balance');
+
+    // Map the data to match the required structure
+    const seekers = pendingBets.map((bet) => ({
+      id: bet._id,
+      creator: bet.userId.username,
+      creatorBalance: bet.userId.balance,
+      wager: bet.amount,
+      gameType: 'Standard', // Assuming a default game type; adjust as needed
+      createdAt: bet.createdAt,
+    }));
+
+    res.json(seekers);
+  } catch (error) {
+    console.error('Error fetching seekers:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred while fetching seekers.' });
+  }
+};
+
+module.exports = { getAvailableSeekers, getBetHistory };

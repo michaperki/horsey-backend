@@ -8,12 +8,12 @@ const BetSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true, // Add index for faster queries
+      index: true,
     },
     gameId: {
       type: String,
       required: true,
-      index: true, // Add index if frequently queried
+      index: true,
     },
     choice: {
       type: String,
@@ -27,9 +27,14 @@ const BetSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'won', 'lost'],
+      enum: ['pending', 'matched', 'won', 'lost'],
       default: 'pending',
-      index: true, // Add index if frequently filtered
+      index: true,
+    },
+    matchedWith: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   { timestamps: true }

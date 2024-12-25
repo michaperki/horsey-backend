@@ -30,24 +30,6 @@ router.post("/mint", authenticateToken, authorizeRole('admin'), async (req, res)
   }
 });
 
-// Route to get token balance by address (Admin Only)
-router.get("/balance/:address", authenticateToken, authorizeRole('admin'), async (req, res) => {
-  const { address } = req.params;
-
-  try {
-    const result = await tokenService.getBalance(address);
-
-    if (result.success) {
-      res.json({ address, balance: result.balance });
-    } else {
-      res.status(500).json({ error: result.error });
-    }
-  } catch (error) {
-    console.error('Error fetching balance:', error.message);
-    res.status(500).json({ error: 'Server error while fetching balance' });
-  }
-});
-
 // New Route to get current user's balance
 router.get("/balance/user", authenticateToken, async (req, res) => {
   const userId = req.user.id;
@@ -62,6 +44,24 @@ router.get("/balance/user", authenticateToken, async (req, res) => {
     res.json({ balance: user.balance });
   } catch (error) {
     console.error('Error fetching user balance:', error.message);
+    res.status(500).json({ error: 'Server error while fetching balance' });
+  }
+});
+
+// Route to get token balance by address (Admin Only)
+router.get("/balance/:address", authenticateToken, authorizeRole('admin'), async (req, res) => {
+  const { address } = req.params;
+
+  try {
+    const result = await tokenService.getBalance(address);
+
+    if (result.success) {
+      res.json({ address, balance: result.balance });
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error fetching balance:', error.message);
     res.status(500).json({ error: 'Server error while fetching balance' });
   }
 });
