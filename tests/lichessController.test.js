@@ -1,6 +1,5 @@
 // backend/tests/lichessController.test.js
 
-jest.mock('axios'); // Mock axios before importing
 jest.mock('../services/emailService'); // Mock emailService
 jest.mock('../services/tokenService'); // Mock tokenService
 jest.mock('../services/lichessService', () => ({
@@ -27,6 +26,7 @@ describe('Lichess Controller - Validate Result', () => {
   let adminToken;
   let admin;
   let user;
+  let seekerUser;
   let consoleErrorMock;
 
   beforeAll(async () => {
@@ -66,6 +66,13 @@ describe('Lichess Controller - Validate Result', () => {
       password: await bcrypt.hash('userpass', 10),
     });
 
+    // Create seekerUser
+    seekerUser = await User.create({
+      username: 'seeker',
+      email: 'seeker@example.com',
+      password: await bcrypt.hash('seekerpass', 10),
+    });
+
     // Mock console.error before each test
     consoleErrorMock = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -79,7 +86,7 @@ describe('Lichess Controller - Validate Result', () => {
 
   it('should process winning bets correctly', async () => {
     const gameId = 'game123-winner';
-    const betAmount = 100;  // Make amount explicit for clarity
+    const betAmount = 100;
 
     // Create a matched bet for this test
     await Bet.create({
@@ -89,15 +96,17 @@ describe('Lichess Controller - Validate Result', () => {
       amount: betAmount,
       status: 'matched',
       finalWhiteId: user._id,
-      finalBlackId: user._id,
+      finalBlackId: seekerUser._id,
     });
 
+    // Mock the getGameOutcome to return a successful outcome
     getGameOutcome.mockResolvedValueOnce({
       success: true,
       outcome: 'white',
       status: 'mate',
     });
 
+    // Mock the tokenService and emailService
     tokenService.mintTokens.mockResolvedValueOnce({ success: true, txHash: '0xabc' });
     emailService.sendEmail.mockResolvedValueOnce({ success: true });
 
@@ -112,7 +121,6 @@ describe('Lichess Controller - Validate Result', () => {
 
     const bet = await Bet.findOne({ gameId, creatorId: user._id });
     expect(bet.status).toBe('won');
-    // Update expectation to use actual bet amount
     expect(tokenService.mintTokens).toHaveBeenCalledWith(user._id, betAmount);
     expect(emailService.sendEmail).toHaveBeenCalledWith(
       user.email,
@@ -120,6 +128,7 @@ describe('Lichess Controller - Validate Result', () => {
       `Congratulations ${user.username}! You won ${betAmount} PTK on game ${gameId}.`
     );
 
+    // Assert that console.error was not called
     expect(console.error).not.toHaveBeenCalled();
   });
 

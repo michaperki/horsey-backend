@@ -58,6 +58,7 @@ const BetSchema = new mongoose.Schema(
 
 // Compound index for creatorId and createdAt to optimize sorting and filtering
 BetSchema.index({ creatorId: 1, createdAt: -1 });
+BetSchema.index({ opponentId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Bet', BetSchema);
 
