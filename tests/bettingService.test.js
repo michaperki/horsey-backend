@@ -29,10 +29,11 @@ describe('Betting Service', () => {
 
     // Create a bet
     bet = await Bet.create({
-      userId: user._id,
+      creatorId: user._id,
       gameId: 'game123',
-      choice: 'white',
+      creatorColor: 'white',
       amount: 100,
+      status: 'pending',
     });
   });
 
@@ -56,12 +57,13 @@ describe('Betting Service', () => {
   });
 
   it('processes losing bets correctly', async () => {
-    // Place another bet that will lose
+    // Place another bet that will lose with updated field names
     const losingBet = await Bet.create({
-      userId: user._id,
+      creatorId: user._id,
       gameId: 'game123',
-      choice: 'black',
+      creatorColor: 'black',
       amount: 50,
+      status: 'pending',
     });
 
     getGameOutcome.mockResolvedValue({ success: true, outcome: 'white' });
@@ -83,3 +85,4 @@ describe('Betting Service', () => {
     await expect(processBetOutcome('invalidGame')).rejects.toThrow('Failed to fetch game outcome');
   });
 });
+

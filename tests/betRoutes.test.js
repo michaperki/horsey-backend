@@ -1,3 +1,4 @@
+
 // backend/tests/betRoutes.test.js
 
 // Mock the necessary services before importing anything else
@@ -47,18 +48,18 @@ describe('GET /bets/seekers', () => {
 
     // Create pending bets (seekers)
     await Bet.create({
-      userId: seekerUser._id,
+      creatorId: seekerUser._id,
       gameId: 'game123',
-      choice: 'white',
+      creatorColor: 'white',
       amount: 50,
       status: 'pending',
     });
 
     // Create a completed bet (non-seeker)
     await Bet.create({
-      userId: nonSeekerUser._id,
+      creatorId: nonSeekerUser._id,
       gameId: 'game124',
-      choice: 'black',
+      creatorColor: 'black',
       amount: 30,
       status: 'won',
     });
@@ -171,7 +172,7 @@ describe('POST /bets/place', () => {
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         gameId: 'game456', // Use a unique gameId to avoid conflicts
-        choice: 'white',
+        creatorColor: 'white',
         amount: 100,
       });
 
@@ -181,9 +182,10 @@ describe('POST /bets/place', () => {
     expect(res.statusCode).toEqual(201);
     expect(res.body).toHaveProperty('message', 'Bet placed successfully');
     expect(res.body.bet).toHaveProperty('gameId', 'game456');
-    expect(res.body.bet).toHaveProperty('choice', 'white');
+    expect(res.body.bet).toHaveProperty('creatorColor', 'white');
     expect(res.body.bet).toHaveProperty('amount', 100);
-    expect(res.body.bet).toHaveProperty('userId', user._id.toString());
+    expect(res.body.bet).toHaveProperty('creatorId', user._id.toString());
+    expect(res.body.bet).toHaveProperty('status', 'pending');
 
     const updatedUser = await User.findById(user._id);
     expect(updatedUser.balance).toBe(900); // 1000 - 100 = 900
@@ -195,7 +197,7 @@ describe('POST /bets/place', () => {
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         gameId: 'game456',
-        choice: 'black',
+        creatorColor: 'black',
         amount: 2000, // Amount greater than user's balance
       });
 
@@ -203,18 +205,18 @@ describe('POST /bets/place', () => {
     expect(res.body).toHaveProperty('error', 'Insufficient token balance');
   });
 
-  it('should not place a bet with invalid choice', async () => {
+  it('should not place a bet with invalid creatorColor', async () => {
     const res = await request(app)
       .post('/bets/place')
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         gameId: 'game456',
-        choice: 'invalidChoice', // Invalid choice
+        creatorColor: 'invalidColor', // Invalid choice
         amount: 100,
       });
 
     expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'choice must be either "white" or "black"');
+    expect(res.body).toHaveProperty('error', 'creatorColor must be "white", "black", or "random"');
   });
 
   it('should not place a bet when betting is closed for the game', async () => {
@@ -229,7 +231,7 @@ describe('POST /bets/place', () => {
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         gameId: 'game789',
-        choice: 'white',
+        creatorColor: 'white',
         amount: 100,
       });
 
@@ -243,11 +245,11 @@ describe('POST /bets/place', () => {
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         gameId: 'game456',
-        // Missing 'choice' and 'amount'
+        // Missing 'creatorColor' and 'amount'
       });
 
     expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'gameId, choice, and amount are required');
+    expect(res.body).toHaveProperty('error', 'gameId, creatorColor, and amount are required');
   });
 
   it('should return 401 if not authenticated', async () => {
@@ -255,7 +257,7 @@ describe('POST /bets/place', () => {
       .post('/bets/place')
       .send({
         gameId: 'game456',
-        choice: 'white',
+        creatorColor: 'white',
         amount: 100,
       });
 
@@ -272,7 +274,7 @@ describe('POST /bets/place', () => {
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         gameId: 'game456',
-        choice: 'white',
+        creatorColor: 'white',
         amount: 100,
       });
 
@@ -281,124 +283,213 @@ describe('POST /bets/place', () => {
   });
 });
 
-describe('GET /bets/your-bets', () => {
-  let userToken;
-  let user;
-  let bets;
 
-  // This hook runs before each test, ensuring a fresh state
+describe('POST /bets/accept/:betId', () => {
+  let creatorToken, opponentToken;
+  let creator, opponent, bet;
+  let seekerUser; // Define seekerUser
+
   beforeEach(async () => {
-    // Create a user
-    user = await User.create({
-      username: 'historyuser',
-      email: 'historyuser@example.com',
-      password: await bcrypt.hash('testpassword', 10),
+    // Create seeker user
+    seekerUser = await User.create({
+      username: 'seeker',
+      email: 'seeker@example.com',
+      password: await bcrypt.hash('seekerpass', 10),
+      balance: 500,
+    });
+
+    // Create creator user
+    creator = await User.create({
+      username: 'creator',
+      email: 'creator@example.com',
+      password: await bcrypt.hash('creatorpass', 10),
       balance: 1000,
     });
 
-    // Generate JWT token for the user
-    userToken = jwt.sign(
-      { id: user._id, username: user.username, role: user.role },
+    // Create opponent user
+    opponent = await User.create({
+      username: 'opponent',
+      email: 'opponent@example.com',
+      password: await bcrypt.hash('opponentpass', 10),
+      balance: 500,
+    });
+
+    // Generate JWT tokens
+    creatorToken = jwt.sign(
+      { id: creator._id, username: creator.username, role: creator.role },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
-    // Create multiple bets for pagination and sorting
-    bets = [];
-    for (let i = 1; i <= 25; i++) {
-      bets.push(await Bet.create({
-        userId: user._id,
-        gameId: `game${i}`,
-        choice: i % 2 === 0 ? 'white' : 'black',
-        amount: 10 * i,
-        status: i % 3 === 0 ? 'won' : i % 3 === 1 ? 'lost' : 'pending',
-        createdAt: new Date(Date.now() - i * 1000 * 60), // Different timestamps
-      }));
-    }
+    opponentToken = jwt.sign(
+      { id: opponent._id, username: opponent.username, role: opponent.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Create a pending bet
+    bet = await Bet.create({
+      creatorId: creator._id,
+      creatorColor: 'white',
+      gameId: 'game789',
+      amount: 100,
+      status: 'pending',
+    });
   });
 
-  // This hook runs after each test, cleaning up the database
   afterEach(async () => {
     await Bet.deleteMany({});
     await User.deleteMany({});
+    jest.clearAllMocks();
   });
 
-  it('should return the first page of user bets with default limit', async () => {
+  it('should accept a bet successfully and assign colors correctly', async () => {
     const res = await request(app)
-      .get('/bets/your-bets')
-      .set('Authorization', `Bearer ${userToken}`)
-      .send();
+      .post(`/bets/accept/${bet._id}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'black',
+      });
 
     expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('page', 1);
-    expect(res.body).toHaveProperty('limit', 10);
-    expect(res.body).toHaveProperty('totalBets', 25);
-    expect(res.body).toHaveProperty('totalPages', 3);
-    expect(res.body.bets.length).toBe(10);
+    expect(res.body).toHaveProperty('message', 'Bet matched successfully');
+    expect(res.body.bet).toHaveProperty('opponentId', opponent._id.toString());
+    expect(res.body.bet).toHaveProperty('opponentColor', 'black');
+    expect(res.body.bet).toHaveProperty('status', 'matched');
+    expect(res.body.bet).toHaveProperty('finalWhiteId', creator._id.toString());
+    expect(res.body.bet).toHaveProperty('finalBlackId', opponent._id.toString());
 
-    // Verify sorting by createdAt descending
-    const firstBetTime = new Date(res.body.bets[0].createdAt).getTime();
-    const secondBetTime = new Date(res.body.bets[1].createdAt).getTime();
-    expect(firstBetTime).toBeGreaterThan(secondBetTime);
+    // Verify opponent's balance deduction
+    const updatedOpponent = await User.findById(opponent._id);
+    expect(updatedOpponent.balance).toBe(400); // 500 - 100 = 400
   });
 
-  it('should return the specified page and limit', async () => {
+  it('should handle color conflict by random assignment', async () => {
+    // Both creator and opponent choose 'white'
+
+    // Update the bet to have creatorColor 'white'
+    bet.creatorColor = 'white';
+    await bet.save();
+
     const res = await request(app)
-      .get('/bets/your-bets?page=2&limit=5')
-      .set('Authorization', `Bearer ${userToken}`)
-      .send();
+      .post(`/bets/accept/${bet._id}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'white',
+      });
 
     expect(res.statusCode).toEqual(200);
-    expect(res.body).toHaveProperty('page', 2);
-    expect(res.body).toHaveProperty('limit', 5);
-    expect(res.body).toHaveProperty('totalBets', 25);
-    expect(res.body).toHaveProperty('totalPages', 5);
-    expect(res.body.bets.length).toBe(5);
+    expect(res.body).toHaveProperty('message', 'Bet matched successfully');
+    expect(res.body.bet.status).toBe('matched');
+
+    // Since both chose 'white', colors should be assigned randomly
+    const finalWhiteId = res.body.bet.finalWhiteId;
+    const finalBlackId = res.body.bet.finalBlackId;
+
+    expect(
+      (finalWhiteId === creator._id.toString() && finalBlackId === opponent._id.toString()) ||
+      (finalWhiteId === opponent._id.toString() && finalBlackId === creator._id.toString())
+    ).toBe(true);
   });
 
-  it('should sort bets by amount ascending', async () => {
-    const res = await request(app)
-      .get('/bets/your-bets?sortBy=amount&order=asc')
-      .set('Authorization', `Bearer ${userToken}`)
-      .send();
+  it('should return error if bet is already matched', async () => {
+    // Accept the bet first
+    await Bet.findByIdAndUpdate(bet._id, {
+      opponentId: opponent._id,
+      opponentColor: 'black',
+      status: 'matched',
+      finalWhiteId: creator._id,
+      finalBlackId: opponent._id,
+    });
 
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.bets[0].amount).toBe(10);
-    expect(res.body.bets[9].amount).toBe(100);
-  });
-
-  it('should return 400 for invalid sort field', async () => {
     const res = await request(app)
-      .get('/bets/your-bets?sortBy=invalidField')
-      .set('Authorization', `Bearer ${userToken}`)
-      .send();
+      .post(`/bets/accept/${bet._id}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'black',
+      });
 
     expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Invalid sort field. Valid fields are: createdAt, amount, gameId, status');
+    expect(res.body).toHaveProperty('error', 'Bet is no longer available or does not exist');
   });
 
-  it('should return 401 if not authenticated', async () => {
-    const res = await request(app).get('/bets/your-bets').send();
+  it('should return error if opponent has insufficient balance', async () => {
+    // Opponent's balance is already 500
 
-    expect(res.statusCode).toEqual(401);
-    expect(res.body).toHaveProperty('error', 'Access denied. No token provided.');
+    // Reduce opponent's balance to 50
+    opponent.balance = 50;
+    await opponent.save();
+
+    const res = await request(app)
+      .post(`/bets/accept/${bet._id}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'black',
+      });
+
+    expect(res.statusCode).toEqual(400);
+    expect(res.body).toHaveProperty('error', 'Insufficient balance to accept this bet');
+
+    // Verify that the bet's opponentId and opponentColor are reverted
+    const updatedBet = await Bet.findById(bet._id);
+    expect(updatedBet.opponentId).toBeNull();
+    expect(updatedBet.opponentColor).toBeNull();
+    expect(updatedBet.status).toBe('pending');
+  });
+
+  it('should return 404 if opponent user does not exist', async () => {
+    // Delete the opponent user
+    await User.findByIdAndDelete(opponent._id);
+
+    const res = await request(app)
+      .post(`/bets/accept/${bet._id}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'black',
+      });
+
+    expect(res.statusCode).toEqual(404);
+    expect(res.body).toHaveProperty('error', 'Opponent user not found');
+
+    // Verify that the bet's opponentId and opponentColor are reverted
+    const updatedBet = await Bet.findById(bet._id);
+    expect(updatedBet.opponentId).toBeNull();
+    expect(updatedBet.opponentColor).toBeNull();
+    expect(updatedBet.status).toBe('pending');
+  });
+
+  it('should return 400 for invalid betId', async () => {
+    const invalidBetId = 'invalidBetId123';
+
+    const res = await request(app)
+      .post(`/bets/accept/${invalidBetId}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'black',
+      });
+
+    expect(res.statusCode).toEqual(400);
+    expect(res.body).toHaveProperty('error', 'Invalid bet ID');
   });
 
   it('should handle server errors gracefully', async () => {
-    // Mock Bet.find to throw an error
-    jest.spyOn(Bet, 'find').mockImplementation(() => {
+    // Mock Bet.findOneAndUpdate to throw an error
+    jest.spyOn(Bet, 'findOneAndUpdate').mockImplementation(() => {
       throw new Error('Database error');
     });
 
     const res = await request(app)
-      .get('/bets/your-bets')
-      .set('Authorization', `Bearer ${userToken}`)
-      .send();
+      .post(`/bets/accept/${bet._id}`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send({
+        opponentColor: 'black',
+      });
 
     expect(res.statusCode).toEqual(500);
-    expect(res.body).toHaveProperty('error', 'An unexpected error occurred while fetching your bets.');
+    expect(res.body).toHaveProperty('error', 'An unexpected error occurred while accepting the bet.');
 
     // Restore the original implementation
-    Bet.find.mockRestore();
+    Bet.findOneAndUpdate.mockRestore();
   });
 });
+

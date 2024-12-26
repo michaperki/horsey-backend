@@ -12,15 +12,25 @@ const jwt = require('jsonwebtoken');
 describe('GET /bets/history', () => {
   let userToken;
   let user;
+  let bets;
+  let seekerUser; // Define seekerUser
 
   // This hook runs before each test, ensuring a fresh state
   beforeEach(async () => {
+    // Create a seeker user
+    seekerUser = await User.create({
+      username: 'seeker',
+      email: 'seeker@example.com',
+      password: await bcrypt.hash('seekerpass', 10),
+      balance: 500,
+    });
+
     // Create a user
-    const hashedPassword = await bcrypt.hash('testpassword', 10);
     user = await User.create({
       username: 'historyuser',
       email: 'historyuser@example.com',
-      password: hashedPassword,
+      password: await bcrypt.hash('testpassword', 10),
+      balance: 1000,
     });
 
     // Generate JWT token for the user
@@ -31,18 +41,23 @@ describe('GET /bets/history', () => {
     );
 
     // Create multiple bets for pagination and sorting
-    const bets = [];
+    bets = [];
     for (let i = 1; i <= 25; i++) {
-      bets.push({
-        userId: user._id,
+      // Alternate between being creator and opponent
+      const isCreator = i % 2 === 0;
+      bets.push(await Bet.create({
+        creatorId: isCreator ? user._id : seekerUser._id,
+        opponentId: isCreator ? seekerUser._id : user._id,
+        creatorColor: i % 2 === 0 ? 'white' : 'black',
+        opponentColor: i % 2 === 0 ? 'black' : 'white',
+        finalWhiteId: isCreator ? user._id : seekerUser._id,
+        finalBlackId: isCreator ? seekerUser._id : user._id,
         gameId: `game${i}`,
-        choice: i % 2 === 0 ? 'white' : 'black',
         amount: 10 * i,
         status: i % 3 === 0 ? 'won' : i % 3 === 1 ? 'lost' : 'pending',
         createdAt: new Date(Date.now() - i * 1000 * 60), // Different timestamps
-      });
+      }));
     }
-    await Bet.insertMany(bets);
   });
 
   // This hook runs after each test, cleaning up the database
@@ -51,7 +66,7 @@ describe('GET /bets/history', () => {
     await User.deleteMany({});
   });
 
-  it('should return the first page of bet history with default limit', async () => {
+  it('should return the first page of user bets with default limit', async () => {
     const res = await request(app)
       .get('/bets/history')
       .set('Authorization', `Bearer ${userToken}`)

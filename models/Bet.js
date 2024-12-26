@@ -4,21 +4,42 @@ const mongoose = require('mongoose');
 
 const BetSchema = new mongoose.Schema(
   {
-    userId: {
+    creatorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
       index: true,
     },
+    opponentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    creatorColor: {
+      type: String,
+      enum: ['white', 'black', 'random'],
+      required: true,
+    },
+    opponentColor: {
+      type: String,
+      enum: ['white', 'black', 'random'],
+      default: null,
+    },
+    finalWhiteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    finalBlackId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     gameId: {
       type: String,
       required: true,
       index: true,
-    },
-    choice: {
-      type: String,
-      enum: ['white', 'black'],
-      required: true,
     },
     amount: {
       type: Number,
@@ -31,17 +52,12 @@ const BetSchema = new mongoose.Schema(
       default: 'pending',
       index: true,
     },
-    matchedWith: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
   },
   { timestamps: true }
 );
 
-// Compound index for userId and createdAt to optimize sorting and filtering
-BetSchema.index({ userId: 1, createdAt: -1 });
+// Compound index for creatorId and createdAt to optimize sorting and filtering
+BetSchema.index({ creatorId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Bet', BetSchema);
 

@@ -23,8 +23,8 @@ const processBetOutcome = async (gameId) => {
   }
 
   // Step 3: Determine winners and losers
-  const winners = bets.filter(bet => bet.choice === outcome);
-  const losers = bets.filter(bet => bet.choice !== outcome);
+  const winners = bets.filter(bet => bet.creatorColor === outcome); // Ensure correct condition
+  const losers = bets.filter(bet => bet.creatorColor !== outcome);
 
   // Step 4: Calculate payouts
   const rewardPerWinner = 10; // Define your reward logic here (e.g., fixed amount, percentage)
@@ -32,14 +32,14 @@ const processBetOutcome = async (gameId) => {
   for (const winner of winners) {
     // Mint tokens as payout
     const payoutAmount = rewardPerWinner; // Adjust as needed
-    const result = await tokenService.mintTokens(winner.userId, payoutAmount);
+    const result = await tokenService.mintTokens(winner.creatorId, payoutAmount);
 
     if (result.success) {
       // Update bet status to 'won'
       winner.status = 'won';
       await winner.save();
     } else {
-      console.error(`Failed to mint tokens for user ${winner.userId}: ${result.error}`);
+      console.error(`Failed to mint tokens for user ${winner.creatorId}: ${result.error}`);
       // Optionally, handle the failure (e.g., retry, notify admin)
     }
   }

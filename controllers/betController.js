@@ -20,12 +20,19 @@ const getBetHistory = async (req, res) => {
   const sortOrder = order === 'asc' ? 1 : -1;
 
   try {
-    const bets = await Bet.find({ userId })
+    // Fetch bets where the user is either creator or opponent
+    const bets = await Bet.find({
+      $or: [{ creatorId: userId }, { opponentId: userId }],
+    })
       .sort({ [sortBy]: sortOrder })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .populate('creatorId', 'username')
+      .populate('opponentId', 'username');
 
-    const totalBets = await Bet.countDocuments({ userId });
+    const totalBets = await Bet.countDocuments({
+      $or: [{ creatorId: userId }, { opponentId: userId }],
+    });
     const totalPages = Math.ceil(totalBets / limit);
 
     res.json({
@@ -47,13 +54,13 @@ const getBetHistory = async (req, res) => {
 const getAvailableSeekers = async (req, res) => {
   try {
     // Fetch all pending bets
-    const pendingBets = await Bet.find({ status: 'pending' }).populate('userId', 'username balance');
+    const pendingBets = await Bet.find({ status: 'pending' }).populate('creatorId', 'username balance');
 
     // Map the data to match the required structure
     const seekers = pendingBets.map((bet) => ({
       id: bet._id,
-      creator: bet.userId.username,
-      creatorBalance: bet.userId.balance,
+      creator: bet.creatorId.username,
+      creatorBalance: bet.creatorId.balance,
       wager: bet.amount,
       gameType: 'Standard', // Assuming a default game type; adjust as needed
       createdAt: bet.createdAt,
@@ -69,50 +76,8 @@ const getAvailableSeekers = async (req, res) => {
 /**
  * Retrieves all bets for the authenticated user.
  * Can include filters like status, game type, etc., as needed.
+ * **This function is removed to eliminate duplication with getBetHistory.**
  */
-const getUserBets = async (req, res) => {
-  const userId = req.user.id; // Retrieved from auth middleware
-  const { status, gameType, page = 1, limit = 10, sortBy = 'createdAt', order = 'desc' } = req.query;
 
-  // Build query object based on provided filters
-  const query = { userId };
+module.exports = { getAvailableSeekers, getBetHistory };
 
-  if (status) {
-    query.status = status;
-  }
-
-  if (gameType) {
-    query.gameType = gameType;
-  }
-
-  // Validate sort fields
-  const validSortFields = ['createdAt', 'amount', 'gameId', 'status'];
-  if (!validSortFields.includes(sortBy)) {
-    return res.status(400).json({ error: `Invalid sort field. Valid fields are: ${validSortFields.join(', ')}` });
-  }
-
-  const sortOrder = order === 'asc' ? 1 : -1;
-
-  try {
-    const bets = await Bet.find(query)
-      .sort({ [sortBy]: sortOrder })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
-    const totalBets = await Bet.countDocuments(query);
-    const totalPages = Math.ceil(totalBets / limit);
-
-    res.json({
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalBets,
-      totalPages,
-      bets,
-    });
-  } catch (error) {
-    console.error(`Error fetching bets for user ${userId}:`, error.message);
-    res.status(500).json({ error: 'An unexpected error occurred while fetching your bets.' });
-  }
-};
-
-module.exports = { getAvailableSeekers, getBetHistory, getUserBets };
