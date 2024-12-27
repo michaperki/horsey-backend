@@ -1,0 +1,28 @@
+
+**File Location:** backend/models/Bet.js
+
+**File Purpose:**  
+Defines the Mongoose schema and model for managing bets within the application.
+
+**Key Functionality:**
+- Schema fields include `creatorId`, `opponentId`, `creatorColor`, `opponentColor`, `gameId`, `amount`, and `status`.
+- Implements timestamps and indexes for efficient querying and sorting.
+- Sets default values and enumerations for specific fields to enforce data integrity.
+
+**Dependencies:**
+- `mongoose`
+
+**Connections:**
+- Interacts with `User` model through references (`creatorId` and `opponentId`).
+- Utilized by controllers and services to create, read, update, and delete bet records.
+
+**Current Status:**
+- Completed: Mongoose model for bets is fully defined and operational.
+
+**Issues/Challenges:**
+- Ensuring data consistency and integrity across related fields.
+- Optimizing indexes for high-performance queries in large datasets.
+
+**Next Steps:**
+- Implement virtual fields or methods for additional bet-related computations.
+- Add pre-save hooks for automated data validations or transformations.

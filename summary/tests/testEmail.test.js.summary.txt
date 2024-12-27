@@ -1,0 +1,22 @@
+### **`backend/tests/testEmail.test.js`**
+
+**Purpose:**  
+Tests the `/email/send-test-email` route of the backend API.
+
+**Key Functionality:**  
+- Mocks `emailService` to simulate email sending.
+- Tests successful email sending, failure handling, and unexpected errors.
+
+**Dependencies:**  
+- Jest
+- `supertest`
+- `emailService` (mocked)
+
+**Connections:**  
+- Ensures email functionality in the backend works as intended.
+
+**Current Status:**  
+Completed.
+
+**Next Steps:**  
+- Expand test cases to include additional email scenarios, such as invalid input.

@@ -1,0 +1,30 @@
+**File Location:** backend/routes/adminAuth.js
+
+**File Purpose:**  
+Handles admin-specific authentication routes, including admin registration and login.
+
+**Key Functionality:**
+- `POST /auth/admin/register`: Allows existing admins to register new admin accounts.
+- `POST /auth/admin/login`: Authenticates admin users and issues JWT tokens.
+
+**Dependencies:**
+- `express`
+- `bcrypt`
+- `jsonwebtoken`
+- `User` model
+- `authMiddleware` for authentication and authorization
+
+**Connections:**
+- Secured routes requiring admin privileges.
+- Interacts with the `User` model to create and authenticate admin accounts.
+
+**Current Status:**
+- Completed: Admin authentication routes are fully implemented.
+
+**Issues/Challenges:**
+- Ensuring secure handling of admin credentials.
+- Preventing unauthorized access and ensuring only admins can perform registration.
+
+**Next Steps:**
+- Implement rate limiting to prevent brute-force attacks on login routes.
+- Enhance validation for input fields to enforce strong password policies.

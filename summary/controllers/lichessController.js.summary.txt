@@ -1,0 +1,31 @@
+
+**File Location:** backend/controllers/lichessController.js
+
+**File Purpose:**  
+Handles the validation of game results from Lichess and updates related bets accordingly.
+
+**Key Functionality:**
+- `validateResultHandler`: Validates game outcomes, updates bet statuses to 'won' or 'lost', mints tokens for winners, and sends notification emails.
+- Error handling for fetching game outcomes and token minting failures.
+
+**Dependencies:**
+- `lichessService` for fetching game outcomes
+- `Bet` model
+- `User` model
+- `tokenService` for minting tokens
+- `emailService` for sending notifications
+
+**Connections:**
+- Receives requests from admin-authenticated routes to validate game results.
+- Interacts with multiple services and models to process bet outcomes.
+
+**Current Status:**
+- Completed: Functional handler for processing game results and updating bets.
+
+**Issues/Challenges:**
+- Managing race conditions when multiple bets are processed simultaneously.
+- Ensuring reliability in token minting and email notifications.
+
+**Next Steps:**
+- Implement transactional operations to ensure atomicity.
+- Add more robust error recovery mechanisms for failed operations.

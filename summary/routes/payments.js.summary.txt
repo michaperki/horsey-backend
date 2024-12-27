@@ -1,0 +1,26 @@
+**File Location:** backend/routes/payments.js
+
+**File Purpose:**  
+Handles payment-related operations, including mock implementations for Stripe and cryptocurrency transactions.
+
+**Key Functionality:**
+- `POST /payments/stripe`: Simulates creating a Stripe payment intent and returns a mock client secret.
+- `POST /payments/crypto`: Simulates a cryptocurrency transaction and returns a mock transaction ID.
+
+**Dependencies:**
+- `express`
+
+**Connections:**
+- Utilized by frontend applications to initiate payment processes.
+- Can be integrated with real payment services in the future.
+
+**Current Status:**
+- Completed: Mock payment routes are operational for testing purposes.
+
+**Issues/Challenges:**
+- Currently uses mock implementations, which need to be replaced with actual payment service integrations for production.
+- Ensuring security and compliance when handling real payment data.
+
+**Next Steps:**
+- Integrate with actual Stripe and cryptocurrency APIs.
+- Implement proper error handling and transaction verification mechanisms.

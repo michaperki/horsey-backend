@@ -1,0 +1,29 @@
+
+**File Location:** backend/services/emailService.js
+
+**File Purpose:**  
+Manages email sending functionalities using Nodemailer, facilitating notifications for various application events.
+
+**Key Functionality:**
+- Configures an email transporter using SMTP credentials.
+- `sendEmail`: Sends emails with specified recipient, subject, and content, supporting both plain text and HTML formats.
+- Logs email sending status, excluding logs during testing.
+
+**Dependencies:**
+- `nodemailer`
+- `dotenv`
+
+**Connections:**
+- Utilizes environment variables for email service credentials.
+- Interacts with routes and controllers to send notifications like bet winnings or account-related emails.
+
+**Current Status:**
+- Completed: Email sending functionalities are implemented and tested.
+
+**Issues/Challenges:**
+- Securing email service credentials to prevent unauthorized access.
+- Handling email delivery failures and implementing retry mechanisms.
+
+**Next Steps:**
+- Integrate with more advanced email services for features like templating and tracking.
+- Implement rate limiting to prevent abuse of email sending capabilities.

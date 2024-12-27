@@ -1,0 +1,32 @@
+**File Location:** backend/routes/tokenRoutes.js
+
+**File Purpose:**  
+Manages routes related to token operations, including minting tokens, retrieving user balances, and fetching token balances by address.
+
+**Key Functionality:**
+- `POST /tokens/mint`: Allows admin users to mint tokens to a specified address.
+- `GET /tokens/balance/user`: Retrieves the authenticated user's token balance.
+- `GET /tokens/balance/:address`: Allows admin users to fetch token balances for any given address.
+
+**Dependencies:**
+- `express`
+- `tokenService`
+- `authMiddleware`
+- `User` model
+- `Bet` model
+
+**Connections:**
+- Secured routes requiring appropriate authentication and authorization.
+- Interfaces with `tokenService` to perform blockchain token operations.
+- Interacts with `User` and `Bet` models for balance management.
+
+**Current Status:**
+- Completed: All token-related routes are implemented and operational.
+
+**Issues/Challenges:**
+- Ensuring secure access to minting operations to prevent unauthorized token creation.
+- Handling blockchain transaction failures and ensuring data consistency.
+
+**Next Steps:**
+- Implement rate limiting and monitoring for token-related routes.
+- Enhance error handling to provide more informative responses to clients.

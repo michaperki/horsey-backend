@@ -1,0 +1,29 @@
+**File Location:** backend/jest.config.js
+
+**File Purpose:**  
+Configures Jest for testing the backend application, specifying test environment, coverage settings, and module path ignores.
+
+**Key Functionality:**
+- Sets the test environment to `node`.
+- Defines setup files to run after the environment is set up.
+- Ignores specific module paths during testing.
+- Configures coverage collection from specified directories and sets coverage reporters.
+
+**Dependencies:**
+- `jest`
+- `mongodb-memory-server` for in-memory MongoDB during tests
+
+**Connections:**
+- Applied across all test files to ensure consistent testing configurations.
+- Integrates with test setup files to initialize and clean up the testing environment.
+
+**Current Status:**
+- Completed: Jest is configured for effective testing with coverage reports.
+
+**Issues/Challenges:**
+- Ensuring coverage settings accurately reflect the codebase for meaningful reports.
+- Managing test performance, especially with extensive coverage reporting.
+
+**Next Steps:**
+- Refine coverage thresholds to enforce code quality.
+- Optimize test suites for faster execution times.

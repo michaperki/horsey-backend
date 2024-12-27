@@ -1,0 +1,27 @@
+
+**File Location:** backend/routes/testEmail.js
+
+**File Purpose:**  
+Provides a route to send test emails, facilitating the verification of email service configurations.
+
+**Key Functionality:**
+- `GET /email/send-test-email`: Sends a test email to a specified recipient using the `emailService`.
+
+**Dependencies:**
+- `express`
+- `emailService`
+
+**Connections:**
+- Utilizes `emailService` to send emails.
+- Can be accessed by developers to verify email sending functionality.
+
+**Current Status:**
+- Completed: Test email route is implemented and functional.
+
+**Issues/Challenges:**
+- Requires proper email service credentials to function correctly.
+- Ensuring that test emails do not spam actual users during development.
+
+**Next Steps:**
+- Implement parameterized test emails to allow dynamic content.
+- Add authentication or access controls to restrict usage to authorized personnel.

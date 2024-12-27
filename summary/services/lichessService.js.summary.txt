@@ -1,0 +1,29 @@
+**File Location:** backend/services/lichessService.js
+
+**File Purpose:**  
+Fetches and processes game outcomes from Lichess, supporting both real API interactions and mocked data for testing.
+
+**Key Functionality:**
+- `getGameOutcome`: Retrieves game outcomes either from the real Lichess API or returns mocked data based on environment configuration.
+- `fetchGameOutcomeFromLichess`: Fetches actual game data from Lichess using `axios`.
+- `getMockedGameOutcome`: Returns predefined mock game outcomes for testing purposes.
+
+**Dependencies:**
+- `axios`
+- `dotenv`
+- `lichessMockData.js`
+
+**Connections:**
+- Used by controllers and services to verify game outcomes before processing bets.
+- Interfaces with external Lichess API or internal mock data based on environment variables.
+
+**Current Status:**
+- Completed: Lichess service is implemented with support for mocking in tests.
+
+**Issues/Challenges:**
+- Handling rate limits and API errors from Lichess.
+- Ensuring mock data accurately reflects possible real-world scenarios.
+
+**Next Steps:**
+- Implement caching mechanisms to reduce redundant API calls.
+- Enhance error handling to cover more failure modes and edge cases.

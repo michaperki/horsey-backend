@@ -1,0 +1,23 @@
+
+### **`backend/tests/setup.js`**
+
+**Purpose:**  
+Provides setup utilities for managing a MongoDB in-memory server and database connections for tests.
+
+**Key Functionality:**  
+- `connect`: Establishes a connection to a MongoDB memory server.
+- `closeDatabase`: Drops the database and closes the connection.
+- `clearDatabase`: Clears all collections to ensure test isolation.
+
+**Dependencies:**  
+- `mongoose`
+- `mongodb-memory-server`
+
+**Connections:**  
+- Used by `setupTests.js` to initialize and manage the test database environment.
+
+**Current Status:**  
+Completed.
+
+**Next Steps:**  
+- Monitor for compatibility issues with future versions of dependencies.

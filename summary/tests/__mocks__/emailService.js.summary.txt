@@ -1,0 +1,22 @@
+**Project Path:** `__mocks__/emailService.js`
+
+**File Purpose:**  
+Provides a mock implementation of the `emailService` for testing email-related functionality.
+
+**Key Functionality:**  
+- Mocks the `sendEmail` method to always return a resolved promise indicating success.
+
+**Dependencies:**  
+- Jest mocking utilities.
+
+**Connections:**  
+- Used in tests involving email-sending functionality without relying on external email services.
+
+**Current Status:**  
+Completed.
+
+**Issues/Challenges:**  
+None identified.
+
+**Next Steps:**  
+- Extend the mock to simulate different email responses (e.g., failures) if required for testing edge cases.

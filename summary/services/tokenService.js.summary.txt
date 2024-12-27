@@ -1,0 +1,29 @@
+**File Location:** backend/services/tokenService.js
+
+**File Purpose:**  
+Facilitates interactions with the `PromoToken` smart contract on the blockchain, including minting, transferring, and querying token balances.
+
+**Key Functionality:**
+- `mintTokens`: Mints a specified amount of tokens to a given address.
+- `getBalance`: Retrieves the token balance of a specified address.
+- `transferTokens`: Transfers tokens from one address to another.
+
+**Dependencies:**
+- `ethers`
+- `dotenv`
+- `PromoToken.json` ABI
+
+**Connections:**
+- Interacts with the Ethereum blockchain via `ethers` and the `PromoToken` smart contract.
+- Utilized by routes and services to manage token operations for users and bets.
+
+**Current Status:**
+- Completed: Token operations are implemented and functional.
+
+**Issues/Challenges:**
+- Managing private keys and ensuring secure interactions with the blockchain.
+- Handling blockchain transaction failures and ensuring data consistency.
+
+**Next Steps:**
+- Implement additional token functionalities as required.
+- Enhance security measures for key management and transaction handling.

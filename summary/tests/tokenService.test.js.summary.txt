@@ -1,0 +1,26 @@
+### **`backend/tests/tokenService.test.js`**
+
+**Purpose:**  
+Tests the `tokenService` for minting tokens and other Ethereum-based functionalities.
+
+**Key Functionality:**  
+- **Mint Tokens**:
+  - Validates successful token minting with mocked Ethereum contract interactions.
+  - Tests failure scenarios during token minting.
+- Mocks:
+  - Ethereum contract methods (`mint`, `balanceOf`, `transferFrom`).
+  - Utility functions like `parseUnits` and `formatUnits`.
+
+**Dependencies:**  
+- Jest for testing and mocking
+- Mocked `ethers` library
+- `tokenService`
+
+**Connections:**  
+- Ensures `tokenService` interacts correctly with Ethereum contracts and handles errors gracefully.
+
+**Current Status:**  
+Completed.
+
+**Next Steps:**  
+- Add tests for `getBalance` and `transferTokens` methods.

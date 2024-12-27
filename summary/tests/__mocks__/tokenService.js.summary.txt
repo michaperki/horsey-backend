@@ -1,0 +1,26 @@
+
+**Project Path:** `__mocks__/tokenService.js`
+
+**File Purpose:**  
+Provides a mock implementation of the `tokenService` for testing token-related operations.
+
+**Key Functionality:**  
+- Mocks:
+  - `mintTokens` for simulating token minting.
+  - `getBalance` for simulating balance retrieval.
+  - `transferTokens` for simulating token transfers.
+
+**Dependencies:**  
+- Jest mocking utilities.
+
+**Connections:**  
+- Used in tests involving token minting, transfers, and balance checks without invoking actual token service logic.
+
+**Current Status:**  
+Completed.
+
+**Issues/Challenges:**  
+None identified.
+
+**Next Steps:**  
+- Extend mock methods to include specific behaviors for additional test scenarios.

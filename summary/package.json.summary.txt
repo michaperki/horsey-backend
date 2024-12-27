@@ -1,0 +1,30 @@
+**File Location:** backend/package.json
+
+**File Purpose:**  
+Manages project dependencies, scripts, and metadata for the backend application.
+
+**Key Functionality:**
+- Defines project name, version, description, and main entry point.
+- Specifies scripts for starting the server, development, testing, linting, and formatting.
+- Lists all dependencies and devDependencies required for application functionality and development workflows.
+
+**Dependencies:**
+- `axios`, `bcrypt`, `cors`, `dotenv`, `ethers`, `express`, `jsonwebtoken`, `mongodb`, `mongoose`, `nodemailer`, `passport`, `stripe`
+
+**DevDependencies:**
+- `dotenv-cli`, `eslint`, `eslint-config-prettier`, `eslint-plugin-prettier`, `globals`, `jest`, `mongodb-memory-server`, `nodemon`, `prettier`, `supertest`
+
+**Connections:**
+- Facilitates running and managing various aspects of the application through defined scripts.
+- Ensures all necessary packages are installed for both production and development environments.
+
+**Current Status:**
+- Completed: `package.json` is fully configured with necessary dependencies and scripts.
+
+**Issues/Challenges:**
+- Managing dependency versions to prevent conflicts and ensure compatibility.
+- Keeping devDependencies updated to benefit from the latest development tools and security patches.
+
+**Next Steps:**
+- Regularly audit dependencies for vulnerabilities using tools like `npm audit`.
+- Update scripts to include new workflows as the project evolves.

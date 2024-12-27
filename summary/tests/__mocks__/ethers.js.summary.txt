@@ -1,0 +1,28 @@
+
+**Project Path:** `__mocks__/ethers.js`
+
+**File Purpose:**  
+Provides a mock implementation of the `ethers` library, focusing on common contract interactions and utility functions.
+
+**Key Functionality:**  
+- Mocks:
+  - `Contract` class with methods like `mint`, `balanceOf`, and `transferFrom`.
+  - `Wallet` and `JsonRpcProvider` classes for testing blockchain-related interactions.
+- Simplistic mock implementations of utility functions `parseUnits` and `formatUnits`.
+- Maintains alignment with `ethers` v6 API.
+
+**Dependencies:**  
+- Jest mocking utilities.
+- Partial reliance on the actual `ethers` library via `jest.requireActual`.
+
+**Connections:**  
+- Used in tests involving smart contract interactions, wallet operations, and other Ethereum blockchain features.
+
+**Current Status:**  
+Completed.
+
+**Issues/Challenges:**  
+None identified.
+
+**Next Steps:**  
+- Expand mock methods and utilities as needed for additional blockchain use cases.

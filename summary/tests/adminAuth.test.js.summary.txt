@@ -1,0 +1,34 @@
+
+**File Location:** backend/tests/adminAuth.test.js
+
+**File Purpose:**  
+Tests the admin authentication routes, including admin registration and login functionalities, ensuring secure and correct behavior.
+
+**Key Functionality:**
+- Tests successful admin login and token issuance.
+- Validates error handling for incorrect credentials, missing fields, and duplicate registrations.
+- Ensures that only authenticated admins can register new admin accounts.
+- Mocks database operations and JWT token generation for isolated testing.
+
+**Dependencies:**
+- `supertest`
+- `mongoose`
+- `User` model
+- `bcrypt`
+- `jsonwebtoken`
+- `jest`
+
+**Connections:**
+- Interacts with the Express application server (`../server`).
+- Communicates with the `User` model to create and authenticate admin accounts.
+
+**Current Status:**
+- Completed: Comprehensive test cases for admin authentication are implemented.
+
+**Issues/Challenges:**
+- Mocking and restoring functions correctly to prevent test interference.
+- Ensuring test isolation to maintain reliability and repeatability.
+
+**Next Steps:**
+- Add tests for token expiration and refresh scenarios.
+- Implement integration tests to cover end-to-end admin authentication flows.

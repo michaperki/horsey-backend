@@ -1,0 +1,31 @@
+
+**File Location:** backend/controllers/betController.js
+
+**File Purpose:**  
+Manages bet-related operations, including retrieving bet history and available game seekers.
+
+**Key Functionality:**
+- `getBetHistory`: Retrieves the authenticated user's bet history with support for pagination and sorting.
+- `getAvailableSeekers`: Fetches all pending bets (game seekers) available for matching.
+
+**Dependencies:**
+- `Bet` model
+- `User` model
+- Authentication middleware
+- `lichessService` for game outcome verification
+
+**Connections:**
+- Interacts with `Bet` and `User` models to fetch and manipulate bet data.
+- Utilizes authentication middleware to ensure secure access.
+- Connects with `lichessService` to verify game statuses.
+
+**Current Status:**
+- Completed: Core functionalities for managing bets are implemented.
+
+**Issues/Challenges:**
+- Ensuring efficient database queries for large datasets.
+- Handling edge cases such as missing or inconsistent data.
+
+**Next Steps:**
+- Implement additional filters for bet retrieval (e.g., by status, date range).
+- Optimize database indexes for faster query performance.

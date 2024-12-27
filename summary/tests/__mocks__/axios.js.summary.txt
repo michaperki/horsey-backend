@@ -1,0 +1,25 @@
+**Project Path:** `__mocks__/axios.js`
+
+**File Purpose:**  
+Provides a mock implementation of the `axios` library for testing HTTP requests.
+
+**Key Functionality:**  
+- Mocks the `axios.get` method to handle requests conditionally:
+  - Returns a resolved promise with mock data for specific URLs.
+  - Returns a rejected promise with a 404 error for other URLs.
+- Mocks the `axios.post` method as a Jest function.
+
+**Dependencies:**  
+- Jest mocking utilities.
+
+**Connections:**  
+- Used in tests requiring HTTP request simulation without making actual network calls.
+
+**Current Status:**  
+Completed.
+
+**Issues/Challenges:**  
+None identified.
+
+**Next Steps:**  
+- Add additional mocked HTTP methods if needed for future tests.

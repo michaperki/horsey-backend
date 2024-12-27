@@ -1,0 +1,32 @@
+
+### **File Name:** db.js
+
+**File Location:** backend/config/db.js
+
+**File Purpose:**  
+Establishes and manages the connection to the MongoDB database using Mongoose.
+
+**Key Functionality:**
+- Loads environment variables using `dotenv`.
+- Determines the MongoDB URI based on the `NODE_ENV` (test or production).
+- Attempts to connect to MongoDB and logs the connection status.
+- Handles connection errors by logging and exiting the process.
+
+**Dependencies:**
+- `mongoose`
+- `dotenv`
+
+**Connections:**
+- Called by `index.js` to initiate the database connection before starting the server.
+- Utilizes environment variables for configuration.
+
+**Current Status:**
+- Completed: Reliable database connection setup is implemented.
+
+**Issues/Challenges:**
+- Requires proper environment variable configuration to avoid connection issues.
+- Handles process termination on connection failure, which might need graceful shutdown mechanisms.
+
+**Next Steps:**
+- Implement retry logic for transient connection failures.
+- Enhance logging for better monitoring and debugging.

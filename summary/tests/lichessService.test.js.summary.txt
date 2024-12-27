@@ -1,0 +1,22 @@
+### **`backend/tests/lichessService.test.js`**
+
+**Purpose:**  
+Tests the `getGameOutcome` function from `lichessService`.
+
+**Key Functionality:**  
+- Mocks `axios.get` for API interactions.
+- Tests successful response handling, API errors, and invalid game data scenarios.
+- Validates proper error logging via `console.error`.
+
+**Dependencies:**  
+- Jest
+- `axios` (mocked)
+
+**Connections:**  
+- Validates the functionality and resilience of `lichessService`.
+
+**Current Status:**  
+Completed.
+
+**Next Steps:**  
+- Add more edge cases, such as timeout scenarios or unexpected API structures.

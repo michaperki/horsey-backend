@@ -1,0 +1,30 @@
+**File Location:** backend/index.js
+
+**File Purpose:**  
+Entry point for the backend application, responsible for initializing environment variables, connecting to the database, and starting the server.
+
+**Key Functionality:**
+- Loads environment variables using `dotenv`.
+- Logs critical environment variables for verification.
+- Connects to MongoDB using `connectDB` unless in a test environment.
+- Starts the Express server on the specified port after a successful database connection.
+
+**Dependencies:**
+- `express`
+- `dotenv`
+- `connectDB` from `config/db.js`
+
+**Connections:**
+- Interfaces with the Express application (`server.js`) to start the server.
+- Utilizes environment variables for configuration.
+
+**Current Status:**
+- Completed: Successfully initializes and starts the backend server.
+
+**Issues/Challenges:**
+- Ensuring environment variables are correctly set and secured.
+- Handling connection failures gracefully to prevent server crashes.
+
+**Next Steps:**
+- Implement health check endpoints for monitoring.
+- Enhance logging for better observability in production environments.

@@ -1,0 +1,30 @@
+### **`backend/tests/userauth.test.js`**
+
+**Purpose:**  
+Tests user authentication routes, including registration and login, to ensure proper handling of user data and credentials.
+
+**Key Functionality:**  
+- **Registration (`/auth/register`)**:
+  - Tests successful registration of new users.
+  - Validates duplicate email prevention and missing field errors.
+- **Login (`/auth/login`)**:
+  - Tests successful login with valid credentials.
+  - Handles invalid credentials, non-existent users, and missing field errors.
+  - Verifies JWT tokens for successful logins.
+
+**Dependencies:**  
+- Jest
+- `supertest` for HTTP requests
+- `bcrypt` for password hashing
+- `jsonwebtoken` for JWT handling
+- Mongoose for database interaction
+- Mocked `emailService`
+
+**Connections:**  
+- Ensures backend user authentication routes work correctly and securely.
+
+**Current Status:**  
+Completed.
+
+**Next Steps:**  
+- Add edge case tests for rate-limiting or account lockout mechanisms.
