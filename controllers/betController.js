@@ -51,16 +51,19 @@ const getBetHistory = async (req, res) => {
 /**
  * Retrieves all available game seekers (pending bets).
  */
+// backend/controllers/betController.js
+
 const getAvailableSeekers = async (req, res) => {
   try {
-    // Fetch all pending bets
-    const pendingBets = await Bet.find({ status: 'pending' }).populate('creatorId', 'username balance');
+    // Fetch all pending bets and populate creatorId with username and balance
+    const pendingBets = await Bet.find({ status: 'pending' })
+      .populate('creatorId', 'username balance');
 
     // Map the data to match the required structure
     const seekers = pendingBets.map((bet) => ({
       id: bet._id,
-      creator: bet.creatorId.username,
-      creatorBalance: bet.creatorId.balance,
+      creator: bet.creatorId ? bet.creatorId.username : 'Unknown', // Handle undefined creatorId
+      creatorBalance: bet.creatorId ? bet.creatorId.balance : 0,  // Handle undefined creatorId
       wager: bet.amount,
       gameType: 'Standard', // Assuming a default game type; adjust as needed
       createdAt: bet.createdAt,

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "dotenv -e .env.test nodemon index.js",
-    "test:cypress": "dotenv -e .env.cypress nodemon index.js",
+    "dev:cypress": "dotenv -e .env.cypress nodemon index.js",
     "test": "jest --forceExit --detectOpenHandles",
     "lint": "eslint .",
     "format": "prettier --write ."
