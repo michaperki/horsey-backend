@@ -89,7 +89,7 @@ router.post('/place', authenticateToken, async (req, res) => {
 // POST /bets/accept/:betId
 router.post('/accept/:betId', authenticateToken, async (req, res) => {
   const { betId } = req.params;
-  const { opponentColor } = req.body; // Optional: acceptor can specify their color preference
+  const { opponentColor } = req.body; // Optional color preference from acceptor
   const opponentId = req.user.id;
 
   // Validate betId
@@ -98,34 +98,22 @@ router.post('/accept/:betId', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Atomic operation to find and update the bet if it's still pending
-    const bet = await Bet.findOneAndUpdate(
-      { _id: betId, status: 'pending', opponentId: null },
-      { opponentId, opponentColor: opponentColor || null },
-      { new: true }
-    ).populate('creatorId', 'username balance');
+    // Fetch the bet and ensure it's still pending and unclaimed
+    const bet = await Bet.findOne({ _id: betId, status: 'pending', opponentId: null }).populate('creatorId', 'username balance');
 
     if (!bet) {
       return res.status(400).json({ error: 'Bet is no longer available or does not exist' });
     }
 
-    // Check if opponent has enough balance
+    // Fetch opponent details
     const opponent = await User.findById(opponentId);
+
     if (!opponent) {
-      // Revert the opponentId and opponentColor
-      bet.opponentId = null;
-      bet.opponentColor = null;
-      bet.status = 'pending';
-      await bet.save();
       return res.status(404).json({ error: 'Opponent user not found' });
     }
 
+    // Ensure opponent has enough balance
     if (opponent.balance < bet.amount) {
-      // Revert the opponentId and opponentColor
-      bet.opponentId = null;
-      bet.opponentColor = null;
-      bet.status = 'pending';
-      await bet.save();
       return res.status(400).json({ error: 'Insufficient balance to accept this bet' });
     }
 
@@ -133,26 +121,11 @@ router.post('/accept/:betId', authenticateToken, async (req, res) => {
     opponent.balance -= bet.amount;
     await opponent.save();
 
-    // Determine final color assignments
+    // Assign colors based on preferences or randomly
     let finalWhiteId, finalBlackId;
 
-    if (bet.creatorColor !== 'random' && opponentColor && opponentColor !== 'random') {
-      if (bet.creatorColor === opponentColor) {
-        // Both chose the same color, randomly assign
-        if (Math.random() < 0.5) {
-          finalWhiteId = bet.creatorId._id;
-          finalBlackId = opponentId;
-        } else {
-          finalWhiteId = opponentId;
-          finalBlackId = bet.creatorId._id;
-        }
-      } else {
-        // Assign based on preferences
-        finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
-        finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
-      }
-    } else {
-      // At least one user chose 'random', assign randomly
+    if (bet.creatorColor === 'random' || opponentColor === 'random') {
+      // Random assignment if either user selects 'random'
       if (Math.random() < 0.5) {
         finalWhiteId = bet.creatorId._id;
         finalBlackId = opponentId;
@@ -160,9 +133,24 @@ router.post('/accept/:betId', authenticateToken, async (req, res) => {
         finalWhiteId = opponentId;
         finalBlackId = bet.creatorId._id;
       }
+    } else if (bet.creatorColor === opponentColor) {
+      // Both chose the same color, assign randomly
+      if (Math.random() < 0.5) {
+        finalWhiteId = bet.creatorId._id;
+        finalBlackId = opponentId;
+      } else {
+        finalWhiteId = opponentId;
+        finalBlackId = bet.creatorId._id;
+      }
+    } else {
+      // Assign colors based on preferences
+      finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
+      finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
     }
 
     // Update the bet with final color assignments and status
+    bet.opponentId = opponentId;
+    bet.opponentColor = opponentColor || 'random';
     bet.finalWhiteId = finalWhiteId;
     bet.finalBlackId = finalBlackId;
     bet.status = 'matched';
@@ -175,6 +163,7 @@ router.post('/accept/:betId', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'An unexpected error occurred while accepting the bet.' });
   }
 });
+
 // GET /bets/history
 router.get('/history', authenticateToken, getBetHistory);
 

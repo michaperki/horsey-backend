@@ -51,7 +51,6 @@ const getBetHistory = async (req, res) => {
 /**
  * Retrieves all available game seekers (pending bets).
  */
-// backend/controllers/betController.js
 
 const getAvailableSeekers = async (req, res) => {
   try {
