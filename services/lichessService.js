@@ -1,3 +1,6 @@
+
+// backend/services/lichessService.js
+
 const axios = require('axios');
 const { mockedGameOutcome } = require('../fixtures/lichessMockData');
 
@@ -37,6 +40,48 @@ const fetchGameOutcomeFromLichess = async (gameId) => {
 };
 
 /**
+ * Creates a Lichess game via the Lichess API.
+ * Note: Lichess API does not provide a direct endpoint for creating games.
+ * You may need to use a bot account or alternative methods.
+ * @param {string} timeControl - The time control for the game (e.g., "5|3").
+ * @param {string} whiteUserId - The ID of the user playing white.
+ * @param {string} blackUserId - The ID of the user playing black.
+ */
+const createLichessGame = async (timeControl, whiteUserId, blackUserId) => {
+  try {
+    // Challenge the black user to a game with specified time control
+    const challengeUrl = `https://lichess.org/api/challenge/${blackUserId}`;
+    
+    const response = await axios.post(challengeUrl, {
+      clock: {
+        initial: parseInt(timeControl.split('|')[0]) * 60, // Convert minutes to seconds
+        increment: parseInt(timeControl.split('|')[1]),
+      },
+      variant: 'standard',
+    }, {
+      headers: {
+        'Authorization': `Bearer ${process.env.LICHESS_BOT_API_TOKEN}`, // Bot account token
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.status === 201) { // Assuming 201 Created
+      return {
+        success: true,
+        gameId: response.data.challenge.id, // Adjust based on actual response
+        gameLink: response.data.challenge.url, // Adjust based on actual response
+      };
+    } else {
+      console.error('Unexpected response status:', response.status);
+      return { success: false };
+    }
+  } catch (error) {
+    console.error('Error creating Lichess game:', error.message);
+    return { success: false };
+  }
+};
+
+/**
  * Gets the game outcome, either mocked or real.
  * @param {string} gameId - The ID of the game.
  */
@@ -57,7 +102,6 @@ const getGameOutcome = async (gameId) => {
       };
     }
     
-    // For network errors, return the actual error message
     if (error.message === 'Network Error') {
       return {
         success: false,
@@ -65,7 +109,6 @@ const getGameOutcome = async (gameId) => {
       };
     }
     
-    // For API errors (e.g., 404), use the response data if available
     if (error.response?.data) {
       return {
         success: false,
@@ -81,4 +124,5 @@ const getGameOutcome = async (gameId) => {
   }
 };
 
-module.exports = { getGameOutcome };
+module.exports = { getGameOutcome, createLichessGame };
+

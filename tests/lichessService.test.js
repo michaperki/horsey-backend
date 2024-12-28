@@ -1,63 +1,90 @@
+
 // backend/tests/lichessService.test.js
-const { getGameOutcome } = require('../services/lichessService');
+
 const axios = require('axios');
+const { createLichessGame } = require('../services/lichessService');
 
 jest.mock('axios');
 
-describe('Lichess Service - getGameOutcome', () => {
-  it('should return the correct outcome for a valid game', async () => {
-    axios.get.mockResolvedValue({
+describe('createLichessGame', () => {
+  afterEach(() => {
+    jest.clearAllMocks(); // Clear mocks after each test
+  });
+
+  it('should successfully create a Lichess game and return gameId and gameLink', async () => {
+    // Arrange: Define the mock response
+    const mockResponse = {
+      status: 201, // Assuming 201 Created
       data: {
-        winner: 'white',
-        players: {
-          white: { user: { name: 'WhitePlayer' } },
-          black: { user: { name: 'BlackPlayer' } },
+        challenge: {
+          id: 'lichessGame123',
+          url: 'https://lichess.org/lichessGame123',
         },
-        status: 'mate',
       },
-    });
+    };
 
-    const result = await getGameOutcome('game123');
+    axios.post.mockResolvedValue(mockResponse);
 
+    // Act: Call the function with test data
+    const result = await createLichessGame('5|3', 'michaperki', 'cheth_testing');
+
+    // Assert: Verify the function returns expected values
     expect(result).toEqual({
       success: true,
-      outcome: 'white',
-      white: 'WhitePlayer',
-      black: 'BlackPlayer',
-      status: 'mate',
+      gameId: 'lichessGame123',
+      gameLink: 'https://lichess.org/lichessGame123',
     });
 
-    // Ensure console.error was not called
-    expect(console.error).not.toHaveBeenCalled();
+    // Optionally, verify Axios was called with correct parameters
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://lichess.org/api/challenge/cheth_testing',
+      {
+        clock: {
+          initial: 300, // 5 minutes * 60 seconds
+          increment: 3,
+        },
+        variant: 'standard',
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.LICHESS_BOT_API_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
   });
 
   it('should handle API errors gracefully', async () => {
-    axios.get.mockRejectedValue(new Error('Network Error'));
+    // Arrange: Mock Axios to reject with an error
+    axios.post.mockRejectedValue(new Error('API Error'));
 
-    const result = await getGameOutcome('game123');
+    // Act: Call the function
+    const result = await createLichessGame('5|3', 'michaperki', 'cheth_testing');
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Network Error');
+    // Assert: Function should return { success: false }
+    expect(result).toEqual({ success: false });
 
-    // Ensure console.error was called with the correct message
-    expect(console.error).toHaveBeenCalledWith(
-      `Error fetching game outcome for Game ID game123:`,
-      'Network Error'
-    );
+    // Optionally, verify Axios was called
+    expect(axios.post).toHaveBeenCalled();
   });
 
-  it('should handle invalid game data', async () => {
-    axios.get.mockResolvedValue({ data: {} }); // Missing players and winner
+  it('should handle unexpected response statuses', async () => {
+    // Arrange: Mock Axios to return a non-201 status
+    const mockResponse = {
+      status: 400, // Bad Request
+      data: {},
+    };
 
-    const result = await getGameOutcome('game123');
+    axios.post.mockResolvedValue(mockResponse);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Invalid game data received from Lichess.');
+    // Act: Call the function
+    const result = await createLichessGame('5|3', 'michaperki', 'cheth_testing');
 
-    // Ensure console.error was called with the correct message
-    expect(console.error).toHaveBeenCalledWith(
-      `Error fetching game outcome for Game ID game123:`,
-      'Invalid game data received from Lichess.'
-    );
+    // Assert: Function should return { success: false }
+    expect(result).toEqual({ success: false });
+
+    // Optionally, verify Axios was called
+    expect(axios.post).toHaveBeenCalled();
   });
 });
+

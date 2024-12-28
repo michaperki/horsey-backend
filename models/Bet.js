@@ -38,7 +38,7 @@ const BetSchema = new mongoose.Schema(
     },
     gameId: {
       type: String,
-      required: true,
+      default: null, // Make gameId optional
       index: true,
     },
     amount: {
@@ -52,13 +52,17 @@ const BetSchema = new mongoose.Schema(
       default: 'pending',
       index: true,
     },
+    timeControl: {
+      type: String,
+      default: '5|3', // Default time control, adjust as needed
+    },
+    // ... any other match details ...
   },
   { timestamps: true }
 );
 
-// Compound index for creatorId and createdAt to optimize sorting and filtering
+// Compound indexes for efficient querying
 BetSchema.index({ creatorId: 1, createdAt: -1 });
 BetSchema.index({ opponentId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Bet', BetSchema);
-

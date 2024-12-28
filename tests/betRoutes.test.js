@@ -4,7 +4,7 @@
 jest.mock('../services/lichessService'); // Mock lichessService
 jest.mock('../services/emailService'); // Mock emailService
 
-const { getGameOutcome } = require('../services/lichessService');
+const { getGameOutcome, createLichessGame } = require('../services/lichessService');
 const request = require('supertest');
 const app = require('../server');
 const User = require('../models/User');
@@ -44,23 +44,30 @@ describe('Bet Routes', () => {
     opponentToken = jwt.sign({ id: opponent._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     userToken = jwt.sign({ id: seekerUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    // Create a pending bet
+    // Create a pending bet without gameId
     bet = await Bet.create({
       creatorId: creator._id,
       creatorColor: 'white',
-      gameId: 'game123',
       amount: 100,
       status: 'pending',
+      timeControl: '5|3',
     });
 
     // Mock `getGameOutcome`
     getGameOutcome.mockResolvedValue({ success: true, status: 'created' });
+
+    // Mock `createLichessGame`
+    createLichessGame.mockResolvedValue({
+      success: true,
+      gameId: 'lichessGame123',
+      gameLink: 'https://lichess.org/lichessGame123',
+    });
   });
 
   afterEach(async () => {
     await User.deleteMany({});
     await Bet.deleteMany({});
-    jest.restoreAllMocks(); // Restore all mocks after each test
+    jest.resetAllMocks(); // Reset all mocks after each test
   });
 
   describe('GET /bets/seekers', () => {
@@ -79,10 +86,12 @@ describe('Bet Routes', () => {
       expect(seeker).toHaveProperty('creator', 'creator');
       expect(seeker).toHaveProperty('creatorBalance', 1000);
       expect(seeker).toHaveProperty('wager', 100);
+      expect(seeker).toHaveProperty('gameType', 'Standard');
+      expect(seeker).toHaveProperty('createdAt');
     });
 
     it('should return an empty array if no seekers are available', async () => {
-      await Bet.deleteMany({});
+      await Bet.deleteMany({ status: 'pending' });
 
       const res = await request(app)
         .get('/bets/seekers')
@@ -102,20 +111,22 @@ describe('Bet Routes', () => {
   });
 
   describe('POST /bets/place', () => {
-    it('should successfully place a bet', async () => {
+    it('should successfully place a bet without gameId', async () => {
       const res = await request(app)
         .post('/bets/place')
         .set('Authorization', `Bearer ${creatorToken}`)
         .send({
-          gameId: 'game456',
-          creatorColor: 'black',
+          colorPreference: 'black',
           amount: 150,
+          timeControl: '3|2',
         });
 
       expect(res.statusCode).toEqual(201);
       expect(res.body).toHaveProperty('message', 'Bet placed successfully');
       expect(res.body.bet).toHaveProperty('creatorId', creator._id.toString());
       expect(res.body.bet).toHaveProperty('status', 'pending');
+      expect(res.body.bet).toHaveProperty('gameId', null);
+      expect(res.body.bet).toHaveProperty('timeControl', '3|2');
 
       const updatedUser = await User.findById(creator._id);
       expect(updatedUser.balance).toBe(850); // 1000 - 150
@@ -126,9 +137,9 @@ describe('Bet Routes', () => {
         .post('/bets/place')
         .set('Authorization', `Bearer ${creatorToken}`)
         .send({
-          gameId: 'game456',
-          creatorColor: 'black',
+          colorPreference: 'black',
           amount: 2000, // More than balance
+          timeControl: '5|3',
         });
 
       expect(res.statusCode).toEqual(400);
@@ -141,14 +152,14 @@ describe('Bet Routes', () => {
         throw new Error('Database error');
       });
 
-      // Make the request to the correct endpoint
+      // Make the request to place a bet
       const res = await request(app)
         .post('/bets/place')
         .set('Authorization', `Bearer ${creatorToken}`)
         .send({
-          gameId: 'game123',
-          creatorColor: 'white',
+          colorPreference: 'white',
           amount: 100,
+          timeControl: '5|3',
         });
 
       // Assertions
@@ -169,22 +180,24 @@ describe('Bet Routes', () => {
         .post(`/bets/accept/${bet._id}`)
         .set('Authorization', `Bearer ${opponentToken}`)
         .send({
-          opponentColor: 'black',
+          colorPreference: 'black',
         });
 
       expect(res.statusCode).toEqual(200);
       expect(res.body).toHaveProperty('message', 'Bet matched successfully');
       expect(res.body.bet).toHaveProperty('finalWhiteId');
       expect(res.body.bet).toHaveProperty('finalBlackId');
+      expect(res.body.bet).toHaveProperty('gameId', 'lichessGame123');
+      expect(res.body.bet).toHaveProperty('status', 'matched');
 
       // Verify that colors are assigned correctly
       const { finalWhiteId, finalBlackId } = res.body.bet;
-      const whiteUser = finalWhiteId.toString() === creator._id.toString() ? creator : opponent;
-      const blackUser = finalBlackId.toString() === creator._id.toString() ? creator : opponent;
+      expect([finalWhiteId, finalBlackId]).toContain(creator._id.toString());
+      expect([finalWhiteId, finalBlackId]).toContain(opponent._id.toString());
 
-      expect(whiteUser).toBeDefined();
-      expect(blackUser).toBeDefined();
-      expect(whiteUser._id.toString()).not.toBe(blackUser._id.toString());
+      // Verify that the opponent's balance was deducted
+      const updatedOpponent = await User.findById(opponent._id);
+      expect(updatedOpponent.balance).toBe(400); // 500 - 100
     });
 
     it('should handle color conflict by random assignment', async () => {
@@ -196,7 +209,7 @@ describe('Bet Routes', () => {
         .post(`/bets/accept/${bet._id}`)
         .set('Authorization', `Bearer ${opponentToken}`)
         .send({
-          opponentColor: 'white',
+          colorPreference: 'white',
         });
 
       expect(res.statusCode).toEqual(200);
@@ -220,7 +233,7 @@ describe('Bet Routes', () => {
         .post(`/bets/accept/${bet._id}`)
         .set('Authorization', `Bearer ${opponentToken}`)
         .send({
-          opponentColor: 'black',
+          colorPreference: 'black',
         });
 
       expect(res.statusCode).toEqual(400);
@@ -228,8 +241,8 @@ describe('Bet Routes', () => {
     });
 
     it('should handle server errors gracefully when fetching the bet', async () => {
-      // Mock Bet.findOne to throw an error
-      const mockFindOne = jest.spyOn(Bet, 'findOne').mockImplementationOnce(() => {
+      // Mock Bet.findOneAndUpdate to throw an error
+      const mockFindOneAndUpdate = jest.spyOn(Bet, 'findOneAndUpdate').mockImplementationOnce(() => {
         throw new Error('Database error');
       });
 
@@ -238,7 +251,7 @@ describe('Bet Routes', () => {
         .post(`/bets/accept/${bet._id}`)
         .set('Authorization', `Bearer ${opponentToken}`)
         .send({
-          opponentColor: 'black',
+          colorPreference: 'black',
         });
 
       // Assertions
@@ -246,35 +259,31 @@ describe('Bet Routes', () => {
       expect(res.body).toHaveProperty('error', 'An unexpected error occurred while accepting the bet.');
 
       // Verify the mock was called
-      expect(mockFindOne).toHaveBeenCalled();
+      expect(mockFindOneAndUpdate).toHaveBeenCalled();
 
       // Cleanup
-      mockFindOne.mockRestore();
+      mockFindOneAndUpdate.mockRestore();
     });
 
-    it('should handle server errors gracefully when saving the bet', async () => {
-      // Mock bet.save() to throw an error
-      const mockSave = jest.spyOn(Bet.prototype, 'save').mockImplementationOnce(() => {
-        throw new Error('Save error');
-      });
+    it('should handle server errors gracefully when creating the Lichess game', async () => {
+      // Mock createLichessGame to fail
+      createLichessGame.mockResolvedValueOnce({ success: false });
 
       // Make the request
       const res = await request(app)
         .post(`/bets/accept/${bet._id}`)
         .set('Authorization', `Bearer ${opponentToken}`)
         .send({
-          opponentColor: 'black',
+          colorPreference: 'black',
         });
 
       // Assertions
       expect(res.statusCode).toEqual(500);
-      expect(res.body).toHaveProperty('error', 'An unexpected error occurred while accepting the bet.');
+      expect(res.body).toHaveProperty('error', 'Failed to create Lichess game');
 
-      // Verify the mock was called
-      expect(mockSave).toHaveBeenCalled();
-
-      // Cleanup
-      mockSave.mockRestore();
+      // Verify that the opponent's balance was reverted
+      const updatedOpponent = await User.findById(opponent._id);
+      expect(updatedOpponent.balance).toBe(500); // Original balance, since deduction was reverted
     });
   });
 });

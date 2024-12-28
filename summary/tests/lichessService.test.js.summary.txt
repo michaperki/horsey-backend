@@ -1,22 +1,36 @@
-### **`backend/tests/lichessService.test.js`**
 
-**Purpose:**  
-Tests the `getGameOutcome` function from `lichessService`.
+### **File Location:** `backend/tests/lichessService.test.js`
 
-**Key Functionality:**  
-- Mocks `axios.get` for API interactions.
-- Tests successful response handling, API errors, and invalid game data scenarios.
-- Validates proper error logging via `console.error`.
+**File Purpose:**  
+Tests the `lichessService` functions, ensuring reliable interaction with the Lichess API and correct handling of both real and mocked data.
 
-**Dependencies:**  
-- Jest
+**Key Functionality:**
+- Mocks `axios` for API interactions to simulate different Lichess API responses.
+- Tests `getGameOutcome` for successful outcome retrieval, handling API errors, and processing invalid game data.
+- Tests `createLichessGame` for successful game creation via a Lichess bot account and handling creation failures.
+- Validates proper error logging via `console.error` to ensure issues are traceable.
+
+**Dependencies:**
+- `jest`
 - `axios` (mocked)
+- `lichessService` module
 
-**Connections:**  
+**Connections:**
 - Validates the functionality and resilience of `lichessService`.
+- Ensures that controllers depending on `lichessService` receive accurate and reliable data.
 
-**Current Status:**  
-Completed.
+**Current Status:**
+- **Completed:** Tests cover successful and failure scenarios for both game outcome retrieval and game creation.
+- **Refined:** Consolidated function definitions ensure accurate testing without redundancy.
 
-**Next Steps:**  
+**Issues/Challenges:**
+- Ensuring that mocked responses accurately represent possible real-world Lichess API responses.
+- Handling asynchronous behavior in tests to prevent false positives or negatives.
+- Maintaining up-to-date mocks as the Lichess API evolves or as application requirements change.
+
+**Next Steps:**
 - Add more edge cases, such as timeout scenarios or unexpected API structures.
+- Implement tests for rate limiting and retry logic within `lichessService`.
+- Explore using tools like [nock](https://github.com/nock/nock) for more advanced HTTP mocking if needed.
+- Ensure that any new features or changes in `lichessService` are promptly reflected in the tests.
+
