@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: 18
 
-      - name: Set Environment Variables
+      - name: Install Dependencies
         env:
           PORT: ${{ secrets.PORT }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
@@ -59,8 +59,6 @@ jobs:
           LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-
-      - name: Install Dependencies
         run: npm install
 
       - name: Run Linter
@@ -69,6 +67,30 @@ jobs:
       - name: Run Tests
         env:
           NODE_ENV: test
+          PORT: ${{ secrets.PORT }}
+          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          OAUTH_CALLBACK_URL: ${{ secrets.OAUTH_CALLBACK_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PROMO_TOKEN_ADDRESS: ${{ secrets.PROMO_TOKEN_ADDRESS }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          GOOGLE_CLIENT_ID_ADMIN: ${{ secrets.GOOGLE_CLIENT_ID_ADMIN }}
+          GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+          MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
+          LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
+          LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
+          LICHESS_REDIRECT_URI: ${{ secrets.LICHESS_REDIRECT_URI }}
+          LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: npm test
 
       - name: Upload Coverage Report
