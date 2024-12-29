@@ -5,6 +5,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const dotenv = require('dotenv');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { getUserProfile } = require('../controllers/userController');
 dotenv.config();
 
 // POST /auth/user/register
@@ -81,5 +83,12 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Server error during login' });
   }
 });
+
+/**
+ * @route   GET /auth/profile
+ * @desc    Get authenticated user's profile
+ * @access  Protected
+ */
+router.get('/profile', authenticateToken, getUserProfile);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-// backend/models/User.js
+
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema(
@@ -39,8 +39,24 @@ const UserSchema = new mongoose.Schema(
         default: true,
       },
     },
+    // **New Lichess Fields**
+    lichessId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows multiple documents to have null
+    },
+    lichessUsername: {
+      type: String,
+    },
+    lichessAccessToken: {
+      type: String,
+    },
+    lichessRefreshToken: {
+      type: String, // Optional: if Lichess provides refresh tokens
+    },
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model('User', UserSchema);
+

@@ -1,6 +1,7 @@
-// backend/server.js 
+
 const express = require('express');
 const cors = require('cors');
+const session = require('express-session'); // **New Dependency**
 const adminAuthRoutes = require('./routes/adminAuth');
 const userAuthRoutes = require('./routes/userAuth');
 const paymentsRoutes = require('./routes/payments');
@@ -8,6 +9,8 @@ const lichessRoutes = require('./routes/lichess');
 const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes');
 const testEmailRoutes = require('./routes/testEmail');
+const dotenv = require('dotenv');
+dotenv.config();
 
 const app = express();
 
@@ -17,7 +20,6 @@ const allowedOrigins = [
   'http://localhost:5000',                   // Cypress Test development
   'http://localhost:5000/',
   'https://horsey-chess.netlify.app',        // Production frontend
-  
 ];
 
 // Middleware
@@ -35,6 +37,14 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// **Session Middleware**
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your_default_session_secret',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: process.env.NODE_ENV === 'production' }, // Use secure cookies in production
+}));
 
 // Routes
 app.use('/auth', userAuthRoutes);
@@ -59,3 +69,4 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app; // Export the app for testing
+
