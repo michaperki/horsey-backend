@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "dotenv -e .env.test nodemon index.js",
     "dev:cypress": "dotenv -e .env.cypress nodemon index.js",
-    "test": "jest --watch --forceExit --detectOpenHandles",
+    "test": "jest --forceExit --detectOpenHandles",
+    "test:watch": "jest --watch --forceExit --detectOpenHandles",
     "lint": "eslint .",
     "format": "prettier --write .",
     "validate-summaries": "node scripts/validateSummaries.mjs"
