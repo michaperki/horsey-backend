@@ -2,6 +2,7 @@
 // backend/tests/lichessService.test.js
 
 const axios = require('axios');
+const qs = require('qs');
 const { createLichessGame } = require('../services/lichessService');
 
 jest.mock('axios');
@@ -35,20 +36,23 @@ describe('createLichessGame', () => {
       gameLink: 'https://lichess.org/lichessGame123',
     });
 
+    // Prepare the expected URL-encoded data
+    const expectedRequestData = qs.stringify({
+      'clock.limit': 300, // 5 minutes * 60 seconds
+      'clock.increment': 3,
+      'variant': 'standard',
+      'color': 'random',
+      'rated': true,
+    });
+
     // Optionally, verify Axios was called with correct parameters
     expect(axios.post).toHaveBeenCalledWith(
       'https://lichess.org/api/challenge/cheth_testing',
-      {
-        clock: {
-          initial: 300, // 5 minutes * 60 seconds
-          increment: 3,
-        },
-        variant: 'standard',
-      },
+      expectedRequestData,
       {
         headers: {
           'Authorization': `Bearer ${process.env.LICHESS_BOT_API_TOKEN}`,
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
       }
     );
@@ -61,8 +65,13 @@ describe('createLichessGame', () => {
     // Act: Call the function
     const result = await createLichessGame('5|3', 'michaperki', 'cheth_testing');
 
-    // Assert: Function should return { success: false }
-    expect(result).toEqual({ success: false });
+    // Assert: Function should return { success: false, error: "API Error" }
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'API Error', // Adjust based on the actual error message
+      })
+    );
 
     // Optionally, verify Axios was called
     expect(axios.post).toHaveBeenCalled();
@@ -80,8 +89,13 @@ describe('createLichessGame', () => {
     // Act: Call the function
     const result = await createLichessGame('5|3', 'michaperki', 'cheth_testing');
 
-    // Assert: Function should return { success: false }
-    expect(result).toEqual({ success: false });
+    // Assert: Function should return { success: false, error: "Unexpected response status." }
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: 'Unexpected response status.',
+      })
+    );
 
     // Optionally, verify Axios was called
     expect(axios.post).toHaveBeenCalled();

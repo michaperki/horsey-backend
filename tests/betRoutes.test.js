@@ -17,12 +17,13 @@ describe('Bet Routes', () => {
   let creator, opponent, seekerUser, bet;
 
   beforeEach(async () => {
-    // Create users
+    // Create users with lichessUsername
     seekerUser = await User.create({
       username: 'seeker',
       email: 'seeker@example.com',
       password: await bcrypt.hash('seekerpass', 10),
       balance: 500,
+      // Assuming seeker doesn't need a Lichess account for these tests
     });
 
     creator = await User.create({
@@ -30,6 +31,7 @@ describe('Bet Routes', () => {
       email: 'creator@example.com',
       password: await bcrypt.hash('creatorpass', 10),
       balance: 1000,
+      lichessUsername: 'creatorLichessUser', // Add Lichess username
     });
 
     opponent = await User.create({
@@ -37,6 +39,7 @@ describe('Bet Routes', () => {
       email: 'opponent@example.com',
       password: await bcrypt.hash('opponentpass', 10),
       balance: 500,
+      lichessUsername: 'opponentLichessUser', // Add Lichess username
     });
 
     // Generate tokens
@@ -53,10 +56,10 @@ describe('Bet Routes', () => {
       timeControl: '5|3',
     });
 
-    // Mock `getGameOutcome`
+    // Mock getGameOutcome
     getGameOutcome.mockResolvedValue({ success: true, status: 'created' });
 
-    // Mock `createLichessGame`
+    // Mock createLichessGame
     createLichessGame.mockResolvedValue({
       success: true,
       gameId: 'lichessGame123',

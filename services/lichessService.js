@@ -41,6 +41,17 @@ const fetchGameOutcomeFromLichess = async (gameId) => {
 };
 
 /**
+ * Example implementation of getGameOutcome
+ * You need to adjust this based on your actual logic.
+ */
+const getGameOutcome = async (gameId) => {
+  if (process.env.MOCK_LICHESS === 'true') {
+    return getMockedGameOutcome();
+  }
+  return await fetchGameOutcomeFromLichess(gameId);
+};
+
+/**
  * Creates a Lichess game via the Lichess API.
  * @param {string} timeControl - The time control for the game (e.g., "5|3").
  * @param {string} whiteUsername - The Lichess username of the user playing white.
@@ -125,4 +136,4 @@ const createLichessGame = async (timeControl, whiteUsername, blackUsername) => {
   }
 };
 
-module.exports = { createLichessGame };
+module.exports = { createLichessGame, getGameOutcome };
