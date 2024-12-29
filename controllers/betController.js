@@ -158,15 +158,26 @@ const acceptBet = async (req, res) => {
       return res.status(400).json({ error: 'Bet is no longer available or does not exist' });
     }
 
+    // **New Validation: Prevent Self-acceptance**
+    if (opponentId.toString() === bet.creatorId._id.toString()) {
+      // Revert the bet status
+      await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+      return res.status(400).json({ error: 'You cannot accept your own bet.' });
+    }
+
     // Fetch opponent details
     const opponent = await User.findById(opponentId);
 
     if (!opponent) {
+      // Revert the bet status
+      await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
       return res.status(404).json({ error: 'Opponent user not found' });
     }
 
     // Ensure opponent has enough balance
     if (opponent.balance < bet.amount) {
+      // Revert the bet status
+      await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
       return res.status(400).json({ error: 'Insufficient balance to accept this bet' });
     }
 
@@ -204,8 +215,45 @@ const acceptBet = async (req, res) => {
     // Optionally, handle timeControl if provided
     const selectedTimeControl = timeControl || bet.timeControl;
 
-    // Create the actual Lichess game via API
-    const lichessGame = await createLichessGame(selectedTimeControl, finalWhiteId, finalBlackId);
+    // **New Steps: Fetch Lichess Usernames**
+    // Fetch both users to get their Lichess usernames
+    const [finalWhiteUser, finalBlackUser] = await Promise.all([
+      User.findById(finalWhiteId),
+      User.findById(finalBlackId),
+    ]);
+
+    // **Error Handling: Check if Lichess usernames exist**
+    if (!finalWhiteUser.lichessUsername) {
+      // Revert opponent's balance and bet status
+      opponent.balance += bet.amount;
+      await opponent.save();
+      // Revert the bet status
+      bet.status = 'pending';
+      bet.opponentId = null;
+      await bet.save();
+
+      return res.status(400).json({ error: 'Creator has not connected their Lichess account.' });
+    }
+
+    if (!finalBlackUser.lichessUsername) {
+      // Revert opponent's balance and bet status
+      opponent.balance += bet.amount;
+      await opponent.save();
+      // Revert the bet status
+      bet.status = 'pending';
+      bet.opponentId = null;
+      await bet.save();
+
+      return res.status(400).json({ error: 'Opponent has not connected their Lichess account.' });
+    }
+
+    const whiteUsername = finalWhiteUser.lichessUsername;
+    const blackUsername = finalBlackUser.lichessUsername;
+
+    console.log(`[acceptBet] White Username: ${whiteUsername}, Black Username: ${blackUsername}`);
+
+    // **Create the Lichess Game with Usernames**
+    const lichessGame = await createLichessGame(selectedTimeControl, whiteUsername, blackUsername);
 
     if (!lichessGame.success) {
       // Revert token deduction if game creation fails
@@ -227,8 +275,8 @@ const acceptBet = async (req, res) => {
 
     await bet.save();
 
-    res.json({ 
-      message: 'Bet matched successfully', 
+    res.json({
+      message: 'Bet matched successfully',
       bet,
       gameLink: lichessGame.gameLink, // Optionally include the game link
     });

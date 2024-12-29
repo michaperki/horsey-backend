@@ -3,3 +3,4 @@ coverage/
 .env
 .env.test
 .env.cypress
+.env.development

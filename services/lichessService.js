@@ -2,6 +2,7 @@
 // backend/services/lichessService.js
 
 const axios = require('axios');
+const qs = require('qs');
 const { mockedGameOutcome } = require('../fixtures/lichessMockData');
 
 /**
@@ -41,88 +42,87 @@ const fetchGameOutcomeFromLichess = async (gameId) => {
 
 /**
  * Creates a Lichess game via the Lichess API.
- * Note: Lichess API does not provide a direct endpoint for creating games.
- * You may need to use a bot account or alternative methods.
  * @param {string} timeControl - The time control for the game (e.g., "5|3").
- * @param {string} whiteUserId - The ID of the user playing white.
- * @param {string} blackUserId - The ID of the user playing black.
+ * @param {string} whiteUsername - The Lichess username of the user playing white.
+ * @param {string} blackUsername - The Lichess username of the user playing black.
+ * @returns {Object} - An object containing success status and game details if successful.
  */
-const createLichessGame = async (timeControl, whiteUserId, blackUserId) => {
+const createLichessGame = async (timeControl, whiteUsername, blackUsername) => {
+  console.log(`[createLichessGame] Initiating game creation with parameters: timeControl=${timeControl}, whiteUsername=${whiteUsername}, blackUsername=${blackUsername}`);
+  
   try {
-    // Challenge the black user to a game with specified time control
-    const challengeUrl = `https://lichess.org/api/challenge/${blackUserId}`;
-    
-    const response = await axios.post(challengeUrl, {
-      clock: {
-        initial: parseInt(timeControl.split('|')[0]) * 60, // Convert minutes to seconds
-        increment: parseInt(timeControl.split('|')[1]),
-      },
-      variant: 'standard',
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.LICHESS_BOT_API_TOKEN}`, // Bot account token
-        'Content-Type': 'application/json',
-      },
+    // Validate input parameters
+    if (!timeControl || !whiteUsername || !blackUsername) {
+      console.error('[createLichessGame] Missing required parameters.');
+      return { success: false, error: 'Missing required parameters.' };
+    }
+
+    // Construct the challenge URL using the black player's username
+    const challengeUrl = `https://lichess.org/api/challenge/${blackUsername}`;
+    console.log(`[createLichessGame] Challenge URL: ${challengeUrl}`);
+
+    // Parse the time control
+    const [minutesStr, incrementStr] = timeControl.split('|');
+    const minutes = parseInt(minutesStr, 10);
+    const increment = parseInt(incrementStr, 10);
+
+    if (isNaN(minutes) || isNaN(increment)) {
+      console.error('[createLichessGame] Invalid timeControl format. Expected format "minutes|increment".');
+      return { success: false, error: 'Invalid timeControl format.' };
+    }
+
+    // Prepare the request data in URL-encoded format
+    const requestData = qs.stringify({
+      'clock.limit': minutes * 60,      // Convert minutes to seconds
+      'clock.increment': increment,
+      'variant': 'standard',
+      'color': 'random',                // Optional: You can set this to 'white', 'black', or 'random'
+      'rated': true,                    // Optional: Set to true if the game should be rated
+      // Add other parameters as needed based on the API documentation
     });
+
+    console.log('[createLichessGame] Request Data:', requestData);
+
+    // Set the headers for URL-encoded data
+    const headers = {
+      'Authorization': `Bearer ${process.env.LICHESS_BOT_API_TOKEN}`, // Ensure this token is correct and has necessary permissions
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+
+    console.log('[createLichessGame] Sending POST request to Lichess API...');
     
-    if (response.status === 201) { // Assuming 201 Created
+    // Send the POST request to create the challenge
+    const response = await axios.post(challengeUrl, requestData, { headers });
+
+    console.log(`[createLichessGame] Received response with status: ${response.status}`);
+    console.log('[createLichessGame] Response Data:', response.data);
+
+    if (response.status === 201 || response.status === 200) { // Some APIs might return 200 for successful creation
       return {
         success: true,
-        gameId: response.data.challenge.id, // Adjust based on actual response
-        gameLink: response.data.challenge.url, // Adjust based on actual response
+        gameId: response.data.challenge.id, // Adjust based on actual response structure
+        gameLink: response.data.challenge.url, // Adjust based on actual response structure
       };
     } else {
-      console.error('Unexpected response status:', response.status);
-      return { success: false };
+      console.error(`[createLichessGame] Unexpected response status: ${response.status}`);
+      console.error('[createLichessGame] Response Data:', response.data);
+      return { success: false, error: 'Unexpected response status.' };
     }
   } catch (error) {
-    console.error('Error creating Lichess game:', error.message);
-    return { success: false };
+    if (error.response) {
+      // The request was made, and the server responded with a status code outside of the 2xx range
+      console.error(`[createLichessGame] API responded with status ${error.response.status}:`, error.response.data);
+      return { success: false, error: `API Error: ${error.response.status}` };
+    } else if (error.request) {
+      // The request was made, but no response was received
+      console.error('[createLichessGame] No response received from Lichess API:', error.request);
+      return { success: false, error: 'No response from API.' };
+    } else {
+      // Something else happened while setting up the request
+      console.error('[createLichessGame] Error setting up the request:', error.message);
+      return { success: false, error: error.message };
+    }
   }
 };
 
-/**
- * Gets the game outcome, either mocked or real.
- * @param {string} gameId - The ID of the game.
- */
-const getGameOutcome = async (gameId) => {
-  try {
-    if (process.env.MOCK_LICHESS === 'true') {
-      return getMockedGameOutcome();
-    }
-    return await fetchGameOutcomeFromLichess(gameId);
-  } catch (error) {
-    console.error(`Error fetching game outcome for Game ID ${gameId}:`, error.message);
-    
-    // Return the specific error message based on error type
-    if (error.message === 'Invalid game data received from Lichess.') {
-      return {
-        success: false,
-        error: 'Invalid game data received from Lichess.'
-      };
-    }
-    
-    if (error.message === 'Network Error') {
-      return {
-        success: false,
-        error: 'Network Error'
-      };
-    }
-    
-    if (error.response?.data) {
-      return {
-        success: false,
-        error: error.response.data
-      };
-    }
-    
-    // Default error case
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-module.exports = { getGameOutcome, createLichessGame };
-
+module.exports = { createLichessGame };
