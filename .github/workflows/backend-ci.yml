@@ -66,7 +66,6 @@ jobs:
 
       - name: Run Tests
         env:
-          NODE_ENV: test
           PORT: ${{ secrets.PORT }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
           OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
@@ -83,7 +82,6 @@ jobs:
           GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          NODE_ENV: ${{ secrets.NODE_ENV }}
           MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
           LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
           LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
