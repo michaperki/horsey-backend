@@ -9,6 +9,7 @@ const {
   validateResultHandler,
   getLichessStatus,
   getLichessUser,
+  disconnectLichessAccountHandler
 } = require('../controllers/lichessController');
 
 // **OAuth Flow Routes**
@@ -33,5 +34,8 @@ router.get('/user', authenticateToken, getLichessUser);
 
 // Define the POST route with the handler
 router.post('/validate-result', authenticateToken, authorizeRole('admin'), validateResultHandler);
+
+// Disconnect Lichess Account
+router.post('/disconnect', authenticateToken, disconnectLichessAccountHandler);
 
 module.exports = router;

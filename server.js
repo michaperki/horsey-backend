@@ -9,6 +9,8 @@ const lichessRoutes = require('./routes/lichess');
 const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes');
 const testEmailRoutes = require('./routes/testEmail');
+const resetDatabaseRoutes = require('./routes/resetDatabase');
+
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -54,6 +56,10 @@ app.use('/lichess', lichessRoutes);
 app.use('/tokens', tokenRoutes);
 app.use('/bets', betRoutes);
 app.use('/email', testEmailRoutes);
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/reset-database', resetDatabaseRoutes);
+}
 
 // Placeholder route
 app.get('/', (req, res) => {
