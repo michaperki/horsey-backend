@@ -61,13 +61,14 @@ const getAvailableSeekers = async (req, res) => {
     const pendingBets = await Bet.find({ status: 'pending' })
       .populate('creatorId', 'username balance');
 
-    // Map the data to match the required structure
+    // Map the data to include creatorColor
     const seekers = pendingBets.map((bet) => ({
       id: bet._id,
       creator: bet.creatorId ? bet.creatorId.username : 'Unknown',
       creatorBalance: bet.creatorId ? bet.creatorId.balance : 0,
       wager: bet.amount,
       gameType: 'Standard',
+      colorPreference: bet.creatorColor, // Include colorPreference
       createdAt: bet.createdAt,
     }));
 
@@ -138,7 +139,6 @@ const placeBet = async (req, res) => {
  */
 const acceptBet = async (req, res) => {
   const { betId } = req.params;
-  const { colorPreference = 'random', timeControl } = req.body;
   const opponentId = req.user.id;
 
   // Validate betId
@@ -158,9 +158,8 @@ const acceptBet = async (req, res) => {
       return res.status(400).json({ error: 'Bet is no longer available or does not exist' });
     }
 
-    // **New Validation: Prevent Self-acceptance**
+    // Prevent self-acceptance
     if (opponentId.toString() === bet.creatorId._id.toString()) {
-      // Revert the bet status
       await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
       return res.status(400).json({ error: 'You cannot accept your own bet.' });
     }
@@ -169,14 +168,12 @@ const acceptBet = async (req, res) => {
     const opponent = await User.findById(opponentId);
 
     if (!opponent) {
-      // Revert the bet status
       await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
       return res.status(404).json({ error: 'Opponent user not found' });
     }
 
     // Ensure opponent has enough balance
     if (opponent.balance < bet.amount) {
-      // Revert the bet status
       await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
       return res.status(400).json({ error: 'Insufficient balance to accept this bet' });
     }
@@ -185,20 +182,11 @@ const acceptBet = async (req, res) => {
     opponent.balance -= bet.amount;
     await opponent.save();
 
-    // Determine final colors
+    // Determine final colors based on creator's color preference
     let finalWhiteId, finalBlackId;
 
-    if (bet.creatorColor === 'random' || colorPreference === 'random') {
-      // If either user selects random, assign randomly
-      if (Math.random() < 0.5) {
-        finalWhiteId = bet.creatorId._id;
-        finalBlackId = opponentId;
-      } else {
-        finalWhiteId = opponentId;
-        finalBlackId = bet.creatorId._id;
-      }
-    } else if (bet.creatorColor === colorPreference) {
-      // Conflict: both chose the same color, assign randomly
+    if (bet.creatorColor === 'random') {
+      // Assign colors randomly
       if (Math.random() < 0.5) {
         finalWhiteId = bet.creatorId._id;
         finalBlackId = opponentId;
@@ -207,67 +195,45 @@ const acceptBet = async (req, res) => {
         finalBlackId = bet.creatorId._id;
       }
     } else {
-      // Assign based on preferences
+      // Assign colors based on creator's preference
       finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
       finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
     }
 
-    // Optionally, handle timeControl if provided
-    const selectedTimeControl = timeControl || bet.timeControl;
-
-    // **New Steps: Fetch Lichess Usernames**
-    // Fetch both users to get their Lichess usernames
+    // Fetch Lichess usernames
     const [finalWhiteUser, finalBlackUser] = await Promise.all([
       User.findById(finalWhiteId),
       User.findById(finalBlackId),
     ]);
 
-    // **Error Handling: Check if Lichess usernames exist**
-    if (!finalWhiteUser.lichessUsername) {
-      // Revert opponent's balance and bet status
+    if (!finalWhiteUser.lichessUsername || !finalBlackUser.lichessUsername) {
+      // Revert changes if usernames are missing
       opponent.balance += bet.amount;
       await opponent.save();
-      // Revert the bet status
       bet.status = 'pending';
       bet.opponentId = null;
       await bet.save();
 
-      return res.status(400).json({ error: 'Creator has not connected their Lichess account.' });
-    }
-
-    if (!finalBlackUser.lichessUsername) {
-      // Revert opponent's balance and bet status
-      opponent.balance += bet.amount;
-      await opponent.save();
-      // Revert the bet status
-      bet.status = 'pending';
-      bet.opponentId = null;
-      await bet.save();
-
-      return res.status(400).json({ error: 'Opponent has not connected their Lichess account.' });
+      return res.status(400).json({ error: 'Both users must connect their Lichess accounts.' });
     }
 
     const whiteUsername = finalWhiteUser.lichessUsername;
     const blackUsername = finalBlackUser.lichessUsername;
 
-    console.log(`[acceptBet] White Username: ${whiteUsername}, Black Username: ${blackUsername}`);
-
-    // **Create the Lichess Game with Usernames**
-    const lichessGame = await createLichessGame(selectedTimeControl, whiteUsername, blackUsername);
+    // Create Lichess game
+    const lichessGame = await createLichessGame(bet.timeControl, whiteUsername, blackUsername);
 
     if (!lichessGame.success) {
-      // Revert token deduction if game creation fails
+      // Revert changes if game creation fails
       opponent.balance += bet.amount;
       await opponent.save();
-      // Also, revert the bet status
       bet.status = 'pending';
       bet.opponentId = null;
       await bet.save();
       return res.status(500).json({ error: 'Failed to create Lichess game' });
     }
 
-    // Update the bet with final color assignments and game information
-    bet.opponentColor = colorPreference;
+    // Update bet with game information
     bet.finalWhiteId = finalWhiteId;
     bet.finalBlackId = finalBlackId;
     bet.gameId = lichessGame.gameId;
@@ -278,7 +244,7 @@ const acceptBet = async (req, res) => {
     res.json({
       message: 'Bet matched successfully',
       bet,
-      gameLink: lichessGame.gameLink, // Optionally include the game link
+      gameLink: lichessGame.gameLink,
     });
   } catch (error) {
     console.error('Error accepting bet:', error.message);
