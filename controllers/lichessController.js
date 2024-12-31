@@ -278,11 +278,11 @@ const getLichessStatus = async (req, res) => {
 };
 
 /**
- * Fetches the connected Lichess user information.
+ * Fetches the connected Lichess user information with enhanced error handling.
  */
 const getLichessUser = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id; // Get the authenticated user's ID
     const user = await User.findById(userId);
 
     if (!user) {
@@ -293,17 +293,23 @@ const getLichessUser = async (req, res) => {
       return res.status(404).json({ error: 'Lichess account not connected' });
     }
 
-    // Extract the standard rating if available
-    const standardRating = user.lichessRatings?.standard?.rating || 'N/A';
+    // Ensure ratings object exists and handle missing ratings gracefully
+    const lichessRatings = user.lichessRatings || {};
+    const ratings = {
+      bullet: lichessRatings.bullet || 'N/A',
+      blitz: lichessRatings.blitz || 'N/A',
+      rapid: lichessRatings.rapid || 'N/A',
+      classical: lichessRatings.classical || 'N/A',
+    };
 
     res.status(200).json({
-      username: user.lichessUsername, // Renamed to 'username'
-      rating: standardRating,          // Extracted and renamed to 'rating'
-      connectedAt: user.lichessConnectedAt || null, // Renamed to 'connectedAt'
+      username: user.lichessUsername || 'N/A',
+      ratings, // Include all ratings
+      connectedAt: user.lichessConnectedAt || null, // Provide connection timestamp if available
     });
   } catch (error) {
-    console.error('Error fetching Lichess user:', error.message);
-    res.status(500).json({ error: 'Failed to fetch Lichess user' });
+    console.error('Error fetching Lichess user information:', error.message);
+    res.status(500).json({ error: 'Failed to fetch Lichess user information' });
   }
 };
 
