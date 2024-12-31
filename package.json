@@ -11,7 +11,8 @@
     "test:watch": "jest --watch --forceExit --detectOpenHandles",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "validate-summaries": "node scripts/validateSummaries.mjs"
+    "validate-summaries": "node scripts/validateSummaries.mjs",
+    "seed-admin": "node scripts/seedAdmin.js"
   },
   "keywords": [],
   "author": "",

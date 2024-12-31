@@ -10,6 +10,7 @@ const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes');
 const testEmailRoutes = require('./routes/testEmail');
 const resetDatabaseRoutes = require('./routes/resetDatabase');
+const testUtilsRoutes = require('./routes/testUtils');
 
 const dotenv = require('dotenv');
 dotenv.config();
@@ -56,6 +57,18 @@ app.use('/lichess', lichessRoutes);
 app.use('/tokens', tokenRoutes);
 app.use('/bets', betRoutes);
 app.use('/email', testEmailRoutes);
+
+// Test-only routes
+if (process.env.NODE_ENV === 'cypress') {
+  app.use('/test', testUtilsRoutes);
+  console.log("test utility routes added")
+}
+
+// Seed admin if not in test environment
+if (process.env.NODE_ENV !== 'cypress') {
+  const seedAdmin = require('./scripts/seedAdmin');
+  seedAdmin();
+}
 
 if (process.env.NODE_ENV !== 'production') {
   app.use('/reset-database', resetDatabaseRoutes);
