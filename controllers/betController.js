@@ -200,12 +200,13 @@ const acceptBet = async (req, res) => {
       finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
     }
 
-    // finalWhiteId, finalBlackId have been determined
+    // Fetch the user details for assigned colors
     const [whiteUser, blackUser] = await Promise.all([
       User.findById(finalWhiteId),
       User.findById(finalBlackId),
     ]);
 
+    // Check if both users have connected their Lichess accounts
     if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
       // Roll back if tokens are missing
       opponent.balance += bet.amount;
@@ -216,7 +217,7 @@ const acceptBet = async (req, res) => {
       return res.status(400).json({ error: 'Both users must connect their Lichess accounts (OAuth token missing).' });
     }
 
-    // Create the Lichess pairing using the tokens
+    // Create the Lichess game using the Lichess Controller
     const lichessResponse = await createLichessGame(
       bet.timeControl,
       whiteUser.lichessAccessToken,
@@ -233,22 +234,24 @@ const acceptBet = async (req, res) => {
       return res.status(500).json({ error: 'Failed to create Lichess game', details: lichessResponse.error });
     }
 
-    // Update the Bet record
+    // Update the Bet record with game details
     bet.finalWhiteId = finalWhiteId;
     bet.finalBlackId = finalBlackId;
-    bet.bulkId = lichessResponse.bulkId; // store the Lichess bulk ID
+    bet.gameId = lichessResponse.gameId; // Store the Lichess game ID
+    bet.gameLink = lichessResponse.gameLink; // Store the Lichess game link if available
     bet.status = 'matched';
     await bet.save();
 
-    // Return success
+    // Return success response
     return res.json({
-      message: 'Bet matched successfully via bulk pairing',
+      message: 'Bet matched successfully',
       bet,
-      bulkId: lichessResponse.bulkId,
+      gameId: lichessResponse.gameId,
+      gameLink: lichessResponse.gameLink,
     });
   } catch (error) {
     console.error('Error accepting bet:', error);
-    return res.status(500).json({ error: 'Server error while accepting bet' });
+    return res.status(500).json({ error: 'An unexpected error occurred while accepting the bet.' }); // Updated error message
   }
 };
 

@@ -32,6 +32,7 @@ describe('Bet Routes', () => {
       password: await bcrypt.hash('creatorpass', 10),
       balance: 1000,
       lichessUsername: 'creatorLichessUser', // Add Lichess username
+      lichessAccessToken: 'creatorAccessToken', // Ensure access token is present
     });
 
     opponent = await User.create({
@@ -40,6 +41,7 @@ describe('Bet Routes', () => {
       password: await bcrypt.hash('opponentpass', 10),
       balance: 500,
       lichessUsername: 'opponentLichessUser', // Add Lichess username
+      lichessAccessToken: 'opponentAccessToken', // Ensure access token is present
     });
 
     // Generate tokens
@@ -59,11 +61,11 @@ describe('Bet Routes', () => {
     // Mock getGameOutcome
     getGameOutcome.mockResolvedValue({ success: true, status: 'created' });
 
-    // Mock createLichessGame
+    // Mock createLichessGame to return gameId instead of bulkId
     createLichessGame.mockResolvedValue({
       success: true,
-      gameId: 'lichessGame123',
-      gameLink: 'https://lichess.org/lichessGame123',
+      gameId: 'lichessGameId123', // Updated to gameId
+      gameLink: 'https://lichess.org/lichessGameId123', // Added gameLink if necessary
     });
   });
 
@@ -90,6 +92,7 @@ describe('Bet Routes', () => {
       expect(seeker).toHaveProperty('creatorBalance', 1000);
       expect(seeker).toHaveProperty('wager', 100);
       expect(seeker).toHaveProperty('gameType', 'Standard');
+      expect(seeker).toHaveProperty('colorPreference', 'white'); // Ensure colorPreference is present
       expect(seeker).toHaveProperty('createdAt');
     });
 
@@ -187,10 +190,10 @@ describe('Bet Routes', () => {
         });
 
       expect(res.statusCode).toEqual(200);
-      expect(res.body).toHaveProperty('message', 'Bet matched successfully');
+      expect(res.body).toHaveProperty('message', 'Bet matched successfully'); // Updated message
       expect(res.body.bet).toHaveProperty('finalWhiteId');
       expect(res.body.bet).toHaveProperty('finalBlackId');
-      expect(res.body.bet).toHaveProperty('gameId', 'lichessGame123');
+      expect(res.body.bet).toHaveProperty('gameId', 'lichessGameId123'); // Updated to gameId
       expect(res.body.bet).toHaveProperty('status', 'matched');
 
       // Verify that colors are assigned correctly
@@ -270,7 +273,7 @@ describe('Bet Routes', () => {
 
     it('should handle server errors gracefully when creating the Lichess game', async () => {
       // Mock createLichessGame to fail
-      createLichessGame.mockResolvedValueOnce({ success: false });
+      createLichessGame.mockResolvedValueOnce({ success: false, error: 'Lichess API error' }); // Provide an error message
 
       // Make the request
       const res = await request(app)
@@ -283,6 +286,7 @@ describe('Bet Routes', () => {
       // Assertions
       expect(res.statusCode).toEqual(500);
       expect(res.body).toHaveProperty('error', 'Failed to create Lichess game');
+      expect(res.body).toHaveProperty('details', 'Lichess API error'); // Ensure details are present
 
       // Verify that the opponent's balance was reverted
       const updatedOpponent = await User.findById(opponent._id);
