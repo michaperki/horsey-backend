@@ -1,6 +1,7 @@
+
 // backend/tests/testEmail.test.js
 const request = require('supertest');
-const app = require('../server');
+const app = require('../server'); // Import the Express app
 const emailService = require('../services/emailService');
 
 // Mock the sendEmail and transporter
@@ -54,3 +55,4 @@ describe('Test Email Route', () => {
     expect(emailService.sendEmail).toHaveBeenCalled();
   });
 });
+

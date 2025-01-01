@@ -64,8 +64,8 @@ if (process.env.NODE_ENV === 'cypress') {
   console.log("test utility routes added")
 }
 
-// Seed admin if not in test environment
-if (process.env.NODE_ENV !== 'cypress') {
+// server.js
+if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'cypress') {
   const seedAdmin = require('./scripts/seedAdmin');
   seedAdmin();
 }
