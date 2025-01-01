@@ -13,35 +13,78 @@ const { getGameOutcome, createLichessGame } = require('../services/lichessServic
  */
 const getBetHistory = async (req, res) => {
   const userId = req.user.id;
-  const { page = 1, limit = 10, sortBy = 'createdAt', order = 'desc' } = req.query;
 
-  // Validate query parameters
+  console.log("Fetching bet history for:", userId);
+  // Existing pagination & sorting
+  const { 
+    page = 1, 
+    limit = 10, 
+    sortBy = 'createdAt', 
+    order = 'desc',
+    status,
+    fromDate,
+    toDate,
+    minWager,
+    maxWager,
+    color,
+    timeControl,
+  } = req.query;
+
+  const filter = {
+    $or: [{ creatorId: userId }, { opponentId: userId }],
+  };
+
+  if (status) {
+    filter.status = status; // e.g. { $or: [...], status: 'pending' }
+  }
+  if (fromDate || toDate) {
+    filter.createdAt = {};
+    if (fromDate) {
+      filter.createdAt.$gte = new Date(fromDate);
+    }
+    if (toDate) {
+      filter.createdAt.$lte = new Date(toDate);
+    }
+  }
+  if (minWager || maxWager) {
+    filter.amount = {};
+    if (minWager) {
+      filter.amount.$gte = Number(minWager);
+    }
+    if (maxWager) {
+      filter.amount.$lte = Number(maxWager);
+    }
+  }
+  if (color) {
+    filter.creatorColor = color; // Or filter by finalWhiteId/finalBlackId if needed
+  }
+  if (timeControl) {
+    filter.timeControl = timeControl;
+  }
+
   const validSortFields = ['createdAt', 'amount', 'gameId', 'status'];
   if (!validSortFields.includes(sortBy)) {
-    return res.status(400).json({ error: `Invalid sort field. Valid fields are: ${validSortFields.join(', ')}` });
+    return res.status(400).json({ 
+      error: `Invalid sort field. Valid fields are: ${validSortFields.join(', ')}`,
+    });
   }
 
   const sortOrder = order === 'asc' ? 1 : -1;
 
   try {
-    // Fetch bets where the user is either creator or opponent
-    const bets = await Bet.find({
-      $or: [{ creatorId: userId }, { opponentId: userId }],
-    })
+    const bets = await Bet.find(filter)
       .sort({ [sortBy]: sortOrder })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit))
+      .limit(parseInt(limit, 10))
       .populate('creatorId', 'username')
       .populate('opponentId', 'username');
 
-    const totalBets = await Bet.countDocuments({
-      $or: [{ creatorId: userId }, { opponentId: userId }],
-    });
+    const totalBets = await Bet.countDocuments(filter);
     const totalPages = Math.ceil(totalBets / limit);
 
     res.json({
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
       totalBets,
       totalPages,
       bets,
@@ -80,11 +123,12 @@ const getAvailableSeekers = async (req, res) => {
 };
 
 /**
- * Places a new bet without requiring a Lichess game ID.
+ * Places a new bet with an expiration time (e.g., 30 minutes).
  */
 const placeBet = async (req, res) => {
   const { colorPreference = 'random', amount, timeControl = '5|3' } = req.body;
   const creatorId = req.user.id;
+  console.log("Placing bet as user:", creatorId);
 
   // Input validation
   if (!['white', 'black', 'random'].includes(colorPreference)) {
@@ -95,13 +139,9 @@ const placeBet = async (req, res) => {
     return res.status(400).json({ error: 'amount must be a positive number' });
   }
 
-  // Validate timeControl format if necessary
-  // For simplicity, assume it's a string like "5|3"
-
   try {
     // Fetch user to check balance
     const user = await User.findById(creatorId);
-
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -115,13 +155,18 @@ const placeBet = async (req, res) => {
     user.balance -= amount;
     await user.save();
 
-    // Create a new Bet instance with status 'pending' and without gameId
+    // Define expiration period (30 minutes in this example)
+    const EXPIRATION_PERIOD_MS = 30 * 60 * 1000; // 30 minutes
+    const expiresAt = new Date(Date.now() + EXPIRATION_PERIOD_MS);
+
+    // Create a new Bet instance with status 'pending' and set expiresAt
     const newBet = new Bet({
       creatorId,
       creatorColor: colorPreference,
       amount,
       timeControl,
       status: 'pending',
+      expiresAt, // Auto-expiration timestamp
     });
 
     // Save the bet to the database
@@ -255,4 +300,36 @@ const acceptBet = async (req, res) => {
   }
 };
 
-module.exports = { getAvailableSeekers, getBetHistory, placeBet, acceptBet };
+const cancelBet = async (req, res) => {
+  const { betId } = req.params;
+  const userId = req.user.id;
+
+  if (!mongoose.Types.ObjectId.isValid(betId)) {
+    return res.status(400).json({ error: 'Invalid bet ID' });
+  }
+
+  try {
+    // Use findOneAndUpdate to handle concurrency; only update if status = 'pending'
+    const bet = await Bet.findOneAndUpdate(
+      { _id: betId, creatorId: userId, status: 'pending' },
+      { status: 'canceled' },
+      { new: true }
+    );
+
+    if (!bet) {
+      return res.status(400).json({ error: 'Bet not found or not in pending status' });
+    }
+
+    // Restore user balance
+    const user = await User.findById(userId);
+    user.balance += bet.amount;
+    await user.save();
+
+    return res.json({ message: 'Bet canceled successfully', bet });
+  } catch (error) {
+    console.error('Error cancelling bet:', error);
+    return res.status(500).json({ error: 'Server error while cancelling bet' });
+  }
+};
+
+module.exports = { getAvailableSeekers, getBetHistory, placeBet, acceptBet, cancelBet };

@@ -6,7 +6,7 @@ const router = express.Router();
 const Bet = require('../models/Bet');
 const User = require('../models/User'); // Assuming a User model exists
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { getAvailableSeekers, getBetHistory, placeBet, acceptBet } = require('../controllers/betController');
+const { getAvailableSeekers, getBetHistory, placeBet, acceptBet, cancelBet } = require('../controllers/betController');
 const { getGameOutcome } = require('../services/lichessService'); // Import the service
 const mongoose = require('mongoose');
 
@@ -36,6 +36,9 @@ router.get('/history', authenticateToken, getBetHistory);
 
 // GET /bets/seekers
 router.get('/seekers', authenticateToken, getAvailableSeekers);
+
+// POST /bets/cancel/:betId
+router.post('/cancel/:betId', authenticateToken, cancelBet);
 
 module.exports = router;
 

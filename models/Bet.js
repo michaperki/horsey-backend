@@ -48,7 +48,7 @@ const BetSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'matched', 'won', 'lost'],
+      enum: ['pending', 'matched', 'won', 'lost', 'canceled', 'expired'], 
       default: 'pending',
       index: true,
     },
@@ -56,7 +56,11 @@ const BetSchema = new mongoose.Schema(
       type: String,
       default: '5|3', // Default time control, adjust as needed
     },
-    // ... any other match details ...
+    // Add an optional field to track when the bet expires
+    expiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -64,5 +68,8 @@ const BetSchema = new mongoose.Schema(
 // Compound indexes for efficient querying
 BetSchema.index({ creatorId: 1, createdAt: -1 });
 BetSchema.index({ opponentId: 1, createdAt: -1 });
+BetSchema.index({ status: 1, createdAt: -1 });
+BetSchema.index({ amount: 1 });  // For min/max wager queries
+BetSchema.index({ expiresAt: 1 });  // For auto-expiration checks
 
 module.exports = mongoose.model('Bet', BetSchema);
