@@ -261,7 +261,12 @@ const getLichessStatus = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(200).json({
+        username: null,
+        ratings: {},
+        connectedAt: null, 
+        connected: fals
+      });
     }
 
     const isConnected = !!user.lichessId && !!user.lichessAccessToken;
