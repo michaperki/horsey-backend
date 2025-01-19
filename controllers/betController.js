@@ -172,6 +172,20 @@ const placeBet = async (req, res) => {
     // Save the bet to the database
     await newBet.save();
 
+    // Emit a 'betCreated' event to the creator's room
+    const io = req.app.get('io');
+    io.to(creatorId.toString()).emit('betCreated', {
+      message: 'Your bet has been placed successfully!',
+      bet: {
+        id: newBet._id,
+        creatorColor: newBet.creatorColor,
+        amount: newBet.amount,
+        timeControl: newBet.timeControl,
+        createdAt: newBet.createdAt,
+        gameLink: newBet.gameLink || null, // Initially null
+      },
+    });
+
     res.status(201).json({ message: 'Bet placed successfully', bet: newBet });
   } catch (error) {
     console.error('Error placing bet:', error.message);
@@ -183,121 +197,153 @@ const placeBet = async (req, res) => {
  * Accepts a pending bet, assigns colors, deducts tokens, creates a Lichess game, and updates the bet.
  */
 const acceptBet = async (req, res) => {
-  const { betId } = req.params;
-  const opponentId = req.user.id;
+    const { betId } = req.params;
+    const opponentId = req.user.id;
 
-  // Validate betId
-  if (!mongoose.Types.ObjectId.isValid(betId)) {
-    return res.status(400).json({ error: 'Invalid bet ID' });
-  }
-
-  try {
-    // Atomically find and update the bet to ensure concurrency safety
-    const bet = await Bet.findOneAndUpdate(
-      { _id: betId, status: 'pending', opponentId: null },
-      { opponentId, status: 'matched' },
-      { new: true }
-    ).populate('creatorId');
-
-    if (!bet) {
-      return res.status(400).json({ error: 'Bet is no longer available or does not exist' });
+    // Validate betId
+    if (!mongoose.Types.ObjectId.isValid(betId)) {
+        return res.status(400).json({ error: 'Invalid bet ID' });
     }
 
-    // Prevent self-acceptance
-    if (opponentId.toString() === bet.creatorId._id.toString()) {
-      await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-      return res.status(400).json({ error: 'You cannot accept your own bet.' });
+    try {
+        // Atomically find and update the bet to ensure concurrency safety
+        const bet = await Bet.findOneAndUpdate(
+            { _id: betId, status: 'pending', opponentId: null },
+            { opponentId, status: 'matched' },
+            { new: true }
+        ).populate('creatorId');
+
+        if (!bet) {
+            return res.status(400).json({ error: 'Bet is no longer available or does not exist' });
+        }
+
+        // Prevent self-acceptance
+        if (opponentId.toString() === bet.creatorId._id.toString()) {
+            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+            return res.status(400).json({ error: 'You cannot accept your own bet.' });
+        }
+
+        // Fetch opponent details
+        const opponent = await User.findById(opponentId);
+
+        if (!opponent) {
+            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+            return res.status(404).json({ error: 'Opponent user not found' });
+        }
+
+        // Ensure opponent has enough balance
+        if (opponent.balance < bet.amount) {
+            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+            return res.status(400).json({ error: 'Insufficient balance to accept this bet' });
+        }
+
+        // Deduct the bet amount from opponent's balance
+        opponent.balance -= bet.amount;
+        await opponent.save();
+
+        // Determine final colors based on creator's color preference
+        let finalWhiteId, finalBlackId;
+
+        if (bet.creatorColor === 'random') {
+            // Assign colors randomly
+            if (Math.random() < 0.5) {
+                finalWhiteId = bet.creatorId._id;
+                finalBlackId = opponentId;
+            } else {
+                finalWhiteId = opponentId;
+                finalBlackId = bet.creatorId._id;
+            }
+        } else {
+            // Assign colors based on creator's preference
+            finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
+            finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
+        }
+
+        // Fetch the user details for assigned colors
+        const [whiteUser, blackUser] = await Promise.all([
+            User.findById(finalWhiteId),
+            User.findById(finalBlackId),
+        ]);
+
+        // Check if both users have connected their Lichess accounts
+        if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
+            // Roll back if tokens are missing
+            opponent.balance += bet.amount;
+            await opponent.save();
+            bet.status = 'pending';
+            bet.opponentId = null;
+            await bet.save();
+            return res.status(400).json({ error: 'Both users must connect their Lichess accounts (OAuth token missing).' });
+        }
+
+        // Create the Lichess game using the Lichess Service
+        const lichessResponse = await createLichessGame(
+            bet.timeControl,
+            whiteUser.lichessAccessToken,
+            blackUser.lichessAccessToken
+        );
+
+        if (!lichessResponse.success) {
+            // Roll back if creation fails
+            opponent.balance += bet.amount;
+            await opponent.save();
+            bet.status = 'pending';
+            bet.opponentId = null;
+            await bet.save();
+            return res.status(500).json({ error: 'Failed to create Lichess game', details: lichessResponse.error });
+        }
+
+        // Update the Bet record with game details
+        bet.finalWhiteId = finalWhiteId;
+        bet.finalBlackId = finalBlackId;
+        bet.gameId = lichessResponse.gameId; // Store the Lichess game ID
+        bet.gameLink = lichessResponse.gameLink; // Store the Lichess game link
+        bet.status = 'matched';
+        await bet.save();
+
+        // Emit a 'betAccepted' event to both the creator and the opponent
+        const io = req.app.get('io');
+        io.to(bet.creatorId._id.toString()).emit('betAccepted', {
+            message: 'Your bet has been accepted!',
+            bet: {
+                id: bet._id,
+                creatorId: bet.creatorId._id,
+                opponentId: bet.opponentId,
+                creatorColor: bet.creatorColor,
+                amount: bet.amount,
+                timeControl: bet.timeControl,
+                status: bet.status,
+                gameLink: bet.gameLink,
+            },
+            gameLink: bet.gameLink,
+        });
+
+        io.to(opponentId.toString()).emit('betAccepted', {
+            message: 'You have accepted a bet!',
+            bet: {
+                id: bet._id,
+                creatorId: bet.creatorId._id,
+                opponentId: bet.opponentId,
+                creatorColor: bet.creatorColor,
+                amount: bet.amount,
+                timeControl: bet.timeControl,
+                status: bet.status,
+                gameLink: bet.gameLink,
+            },
+            gameLink: bet.gameLink,
+        });
+
+        // Return success response
+        return res.json({
+            message: 'Bet matched successfully',
+            bet,
+            gameId: lichessResponse.gameId,
+            gameLink: lichessResponse.gameLink,
+        });
+    } catch (error) {
+        console.error('Error accepting bet:', error);
+        return res.status(500).json({ error: 'An unexpected error occurred while accepting the bet.' });
     }
-
-    // Fetch opponent details
-    const opponent = await User.findById(opponentId);
-
-    if (!opponent) {
-      await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-      return res.status(404).json({ error: 'Opponent user not found' });
-    }
-
-    // Ensure opponent has enough balance
-    if (opponent.balance < bet.amount) {
-      await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-      return res.status(400).json({ error: 'Insufficient balance to accept this bet' });
-    }
-
-    // Deduct the bet amount from opponent's balance
-    opponent.balance -= bet.amount;
-    await opponent.save();
-
-    // Determine final colors based on creator's color preference
-    let finalWhiteId, finalBlackId;
-
-    if (bet.creatorColor === 'random') {
-      // Assign colors randomly
-      if (Math.random() < 0.5) {
-        finalWhiteId = bet.creatorId._id;
-        finalBlackId = opponentId;
-      } else {
-        finalWhiteId = opponentId;
-        finalBlackId = bet.creatorId._id;
-      }
-    } else {
-      // Assign colors based on creator's preference
-      finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
-      finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
-    }
-
-    // Fetch the user details for assigned colors
-    const [whiteUser, blackUser] = await Promise.all([
-      User.findById(finalWhiteId),
-      User.findById(finalBlackId),
-    ]);
-
-    // Check if both users have connected their Lichess accounts
-    if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
-      // Roll back if tokens are missing
-      opponent.balance += bet.amount;
-      await opponent.save();
-      bet.status = 'pending';
-      bet.opponentId = null;
-      await bet.save();
-      return res.status(400).json({ error: 'Both users must connect their Lichess accounts (OAuth token missing).' });
-    }
-
-    // Create the Lichess game using the Lichess Controller
-    const lichessResponse = await createLichessGame(
-      bet.timeControl,
-      whiteUser.lichessAccessToken,
-      blackUser.lichessAccessToken
-    );
-
-    if (!lichessResponse.success) {
-      // Roll back if creation fails
-      opponent.balance += bet.amount;
-      await opponent.save();
-      bet.status = 'pending';
-      bet.opponentId = null;
-      await bet.save();
-      return res.status(500).json({ error: 'Failed to create Lichess game', details: lichessResponse.error });
-    }
-
-    // Update the Bet record with game details
-    bet.finalWhiteId = finalWhiteId;
-    bet.finalBlackId = finalBlackId;
-    bet.gameId = lichessResponse.gameId; // Store the Lichess game ID
-    bet.gameLink = lichessResponse.gameLink; // Store the Lichess game link if available
-    bet.status = 'matched';
-    await bet.save();
-
-    // Return success response
-    return res.json({
-      message: 'Bet matched successfully',
-      bet,
-      gameId: lichessResponse.gameId,
-      gameLink: lichessResponse.gameLink,
-    });
-  } catch (error) {
-    console.error('Error accepting bet:', error);
-    return res.status(500).json({ error: 'An unexpected error occurred while accepting the bet.' }); // Updated error message
-  }
 };
 
 const cancelBet = async (req, res) => {

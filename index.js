@@ -1,29 +1,73 @@
 
 // backend/index.js
-const app = require('./server');
+
+const http = require('http');
+const app = require('./server'); // Ensure this points to your Express app
 const connectDB = require('./config/db');
 const dotenv = require('dotenv');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken'); // To verify JWT
 
 dotenv.config();
 
-// Log the environment variables (you can selectively log specific ones if needed)
-console.log('Environment Variables:', {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  MOCK_LICHESS: process.env.MOCK_LICHESS,
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'http://localhost:3000',                   // Local development
+      'http://localhost:5000',                   // Cypress Test development
+      'https://horsey-chess.netlify.app',        // Production frontend
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
 });
 
-// Connect to MongoDB only if not in test environment
-if (process.env.NODE_ENV !== 'test') {
-  connectDB()
-    .then(() => {
-      const PORT = process.env.PORT || 5000;
-      app.listen(PORT, () => {
-        console.log(`Backend server is running on port ${PORT}`);
-      });
-    })
-    .catch((error) => {
-      console.error('MongoDB connection error:', error.message);
-      process.exit(1); // Exit process with failure
+// Middleware to authenticate Socket.io connections
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    console.error('Socket connection rejected: No token provided');
+    return next(new Error('Authentication error: Token required'));
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded; // Attach user info to socket
+    next();
+  } catch (err) {
+    console.error('Socket connection rejected: Invalid token');
+    next(new Error('Authentication error: Invalid token'));
+  }
+});
+
+// Handle Socket.io connections
+io.on('connection', (socket) => {
+  console.log(`User connected: ${socket.user.id}`);
+
+  // Join a room specific to the user for targeted notifications
+  socket.join(socket.user.id);
+
+  socket.on('disconnect', () => {
+    console.log(`User disconnected: ${socket.user.id}`);
+  });
+});
+
+// Make io accessible in your routes/controllers
+app.set('io', io);
+
+// Connect to MongoDB and start the server
+connectDB()
+  .then(() => {
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => {
+      console.log(`Backend server is running on port ${PORT}`);
     });
-}
+  })
+  .catch((error) => {
+    console.error('MongoDB connection error:', error.message);
+    process.exit(1);
+  });
+

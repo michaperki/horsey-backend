@@ -50,15 +50,17 @@ const getGameOutcome = async (gameId) => {
 
 /**
  * Create a Lichess game challenge between two players.
- * @param {string} player1Username - Lichess username for player 1.
- * @param {string} player2Username - Lichess username for player 2.
- * @param {string} timeControl - Time control format, e.g., "300" for 5 minutes.
+ * @param {string} timeControl - Time control format, e.g., "5|3" for 5 minutes with 3-second increment.
+ * @param {string} player1AccessToken - Lichess access token for player 1.
+ * @param {string} player2AccessToken - Lichess access token for player 2.
  * @returns {object} Response data from Lichess API or error details.
  */
-async function createLichessGame(timeControl, player1Username, player2Username) {
+async function createLichessGame(timeControl, player1AccessToken, player2AccessToken) {
     try {
         console.log('Starting to create Lichess game...');
-        console.log('Player 1:', player1Username, 'Player 2:', player2Username, 'Time Control:', timeControl);
+        console.log('Player 1 Access Token:', player1AccessToken ? 'Provided' : 'Missing');
+        console.log('Player 2 Access Token:', player2AccessToken ? 'Provided' : 'Missing');
+        console.log('Time Control:', timeControl);
 
         // Validate timeControl format
         if (!/^\d+\|\d+$/.test(timeControl)) {
@@ -76,39 +78,77 @@ async function createLichessGame(timeControl, player1Username, player2Username) 
 
         console.log('Parsed clock values:', { clockLimit, clockIncrement });
 
-        const lichessApiUrl = 'https://lichess.org/api/challenge/open';
-        const headers = {
-            Authorization: `Bearer ${process.env.LICHESS_OAUTH_TOKEN}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
+        // Prepare challenge data
+        const challengeData = {
+            variant: 'standard',
+            rated: false,
+            clock: {
+                limit: clockLimit,
+                increment: clockIncrement,
+            },
+            color: 'random',
+            opponent: null, // Will be set for each player
         };
 
-        const body = qs.stringify({
-            variant: 'standard',
-            rated: 'false', // Set to 'true' if rated games are needed
-            color: 'random',
-            'clock.limit': clockLimit,
-            'clock.increment': clockIncrement,
-            users: `${player1Username},${player2Username}`,
-            rules: 'noRematch,noGiveTime,noEarlyDraw',
-            name: 'Cheth Game',
-        });
+        // Create challenge for Player 1 to Player 2
+        challengeData.opponent = ''; // Placeholder
 
-        console.log('Sending POST request to Lichess API...');
-        const response = await axios.post(lichessApiUrl, body, { headers });
+        // Since Lichess API requires separate challenges, we'll create two challenges:
+        // Player 1 challenges Player 2 and vice versa to ensure both have access.
 
-        console.log('Response received:', response.status, response.data);
-
-        if (response.status === 200 || response.status === 201) {
-            return {
-                success: true,
-                challenge: response.data,
+        // Function to create a challenge
+        const createChallenge = async (challengerAccessToken, opponentUsername) => {
+            const url = `https://lichess.org/api/challenge/${opponentUsername}`;
+            const headers = {
+                Authorization: `Bearer ${challengerAccessToken}`,
+                'Content-Type': 'application/json',
             };
+            const body = JSON.stringify({
+                variant: challengeData.variant,
+                rated: challengeData.rated,
+                clock: challengeData.clock,
+                color: challengeData.color,
+                timeControl: `${minutes}|${increment}`,
+                rules: 'noRematch,noGiveTime,noEarlyDraw',
+            });
+
+            console.log(`Creating challenge from ${opponentUsername}...`);
+
+            const response = await axios.post(url, body, { headers });
+
+            console.log(`Challenge created:`, response.data);
+            return response.data; // Returns challenge data including id and status
+        };
+
+        // Assuming you have access to both players' usernames
+        // You'll need to fetch them based on access tokens or pass them as parameters
+        // For simplicity, let's assume you can extract usernames from access tokens
+        // Alternatively, modify the function to accept usernames as parameters
+
+        // Placeholder: Extract usernames (Implement actual extraction based on your auth system)
+        const player1Username = await getUsernameFromAccessToken(player1AccessToken);
+        const player2Username = await getUsernameFromAccessToken(player2AccessToken);
+
+        if (!player1Username || !player2Username) {
+            throw new Error('Unable to retrieve usernames from access tokens.');
         }
 
-        console.warn('Unexpected response status:', response.status);
+        // Create challenges
+        const [challenge1, challenge2] = await Promise.all([
+            createChallenge(player1AccessToken, player2Username),
+            createChallenge(player2AccessToken, player1Username),
+        ]);
+
+        // Construct game link (assuming both challenges are accepted)
+        // In reality, you might need to listen for challenge acceptance or use webhooks
+        // Here, we'll mock the game link using the challenge ID
+
+        const gameLink = `https://lichess.org/${challenge1.id}`; // Using challenge1.id as gameId placeholder
+
         return {
-            success: false,
-            error: `Challenge request failed, status: ${response.status}`,
+            success: true,
+            gameId: challenge1.id,
+            gameLink,
         };
     } catch (error) {
         console.error('Error creating challenge on Lichess:', error.response?.data || error.message);
@@ -116,6 +156,24 @@ async function createLichessGame(timeControl, player1Username, player2Username) 
             success: false,
             error: error.response?.data || error.message,
         };
+    }
+}
+
+/**
+ * Mock function to get username from access token.
+ * Replace this with actual implementation.
+ */
+async function getUsernameFromAccessToken(accessToken) {
+    try {
+        const response = await axios.get('https://lichess.org/api/account', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+        return response.data.username;
+    } catch (error) {
+        console.error('Error fetching username from Lichess:', error.message);
+        return null;
     }
 }
 

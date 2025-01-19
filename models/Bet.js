@@ -41,6 +41,10 @@ const BetSchema = new mongoose.Schema(
       default: null, // Make gameId optional
       index: true,
     },
+    gameLink: {
+      type: String,
+      default: null
+    },
     amount: {
       type: Number,
       required: true,
