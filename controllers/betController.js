@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 const Bet = require('../models/Bet');
 const User = require('../models/User');
-const { getGameOutcome, createLichessGame } = require('../services/lichessService');
+const { getGameOutcome, createLichessGame, getUsernameFromAccessToken } = require('../services/lichessService');
 
 /**
  * Retrieves the bet history for the authenticated user.
@@ -280,7 +280,8 @@ const acceptBet = async (req, res) => {
         const lichessResponse = await createLichessGame(
             bet.timeControl,
             whiteUser.lichessAccessToken,
-            blackUser.lichessAccessToken
+            blackUser.lichessAccessToken,
+            getUsernameFromAccessToken
         );
 
         if (!lichessResponse.success) {
