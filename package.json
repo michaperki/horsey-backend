@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "validate-summaries": "node scripts/validateSummaries.mjs",
-    "seed-admin": "node scripts/seedAdmin.js"
+    "seed-admin": "node scripts/seedAdmin.js",
+    "clear-bets": "node scripts/cleanupAllBets.js"
   },
   "keywords": [],
   "author": "",
@@ -31,11 +32,13 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.12.0",
     "mongoose": "^8.9.1",
+    "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
     "passport": "^0.7.0",
     "path": "^0.12.7",
     "socket.io": "^4.8.1",
-    "stripe": "^17.4.0"
+    "stripe": "^17.4.0",
+    "web3": "^4.16.0"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",

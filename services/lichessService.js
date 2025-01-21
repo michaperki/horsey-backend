@@ -20,7 +20,7 @@ const getMockedGameOutcome = () => {
 const fetchGameOutcomeFromLichess = async (gameId) => {
     const url = `https://lichess.org/game/export/${gameId}?pgnInJson=true`;
     const response = await axios.get(url, {
-        headers: { 'Authorization': `Bearer ${process.env.LICHESS_TOKEN}` },
+        headers: { 'Authorization': `Bearer ${process.env.LICHESS_OAUTH_TOKEN}` },
     });
 
     const gameData = response.data;
@@ -41,14 +41,43 @@ const fetchGameOutcomeFromLichess = async (gameId) => {
 };
 
 /**
- * Get the game outcome based on environment and logic.
+ * Fetches the game outcome from Lichess API.
  * @param {string} gameId - The ID of the game.
+ * @returns {object} - { success: boolean, outcome: 'white' | 'black' | 'draw', error?: string }
  */
 const getGameOutcome = async (gameId) => {
-    if (process.env.MOCK_LICHESS === 'true') {
-        return getMockedGameOutcome();
+    try {
+        const url = `https://lichess.org/game/export/${gameId}`;
+        const response = await axios.get(url, {
+            headers: {
+                'Accept': 'application/json',
+                // If authentication is required, include the access token
+                // 'Authorization': `Bearer YOUR_ACCESS_TOKEN`,
+            },
+        });
+
+        const gameData = response.data;
+
+        if (!gameData || !gameData.players) {
+            throw new Error('Invalid game data received from Lichess.');
+        }
+
+        const { white, black, winner, status } = gameData;
+
+        if (status === 'draw') {
+            return { success: true, outcome: 'draw' };
+        } else if (winner === 'white') {
+            return { success: true, outcome: 'white' };
+        } else if (winner === 'black') {
+            return { success: true, outcome: 'black' };
+        } else {
+            // Game is still ongoing or an unexpected status
+            return { success: false, error: 'Game is still ongoing or has an unexpected status.' };
+        }
+    } catch (error) {
+        console.error(`Error fetching game outcome for Game ID ${gameId}:`, error.message);
+        return { success: false, error: error.message };
     }
-    return await fetchGameOutcomeFromLichess(gameId);
 };
 
 /**

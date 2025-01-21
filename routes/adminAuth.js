@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { authenticateToken, authorizeRole } = require('../middleware/authMiddleware');
+const { mintTokens } = require('../controllers/adminController');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -84,5 +85,12 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Server error during admin login' });
   }
 });
+
+/**
+ * @route   POST /auth/admin/mint
+ * @desc    Admin can mint new tokens to a specified address
+ * @access  Admin Only
+ */
+router.post('/mint', authenticateToken, authorizeRole('admin'), mintTokens);
 
 module.exports = router;

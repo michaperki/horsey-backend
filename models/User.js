@@ -1,4 +1,3 @@
-// backend/models/User.js
 
 const mongoose = require('mongoose');
 
@@ -71,8 +70,11 @@ const UserSchema = new mongoose.Schema(
       type: LichessRatingsSchema, // New field to store ratings
       default: {}, // Initialize as empty object
     },
+    // **Removed Ethereum Address Field**
+    // ethereumAddress: { ... } // Removed or not used
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model('User', UserSchema);
+

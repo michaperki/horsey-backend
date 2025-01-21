@@ -159,14 +159,15 @@ const placeBet = async (req, res) => {
     const EXPIRATION_PERIOD_MS = 30 * 60 * 1000; // 30 minutes
     const expiresAt = new Date(Date.now() + EXPIRATION_PERIOD_MS);
 
-    // Create a new Bet instance with status 'pending' and set expiresAt
+    // Create a new Bet instance with status 'matched' and set gameId when game is created
     const newBet = new Bet({
       creatorId,
       creatorColor: colorPreference,
       amount,
       timeControl,
-      status: 'pending',
-      expiresAt, // Auto-expiration timestamp
+      status: 'pending', // Status set to 'matched' to indicate it's ready for processing
+      // gameId will be set when the game is created
+      expiresAt,
     });
 
     // Save the bet to the database
