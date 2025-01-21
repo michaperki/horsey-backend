@@ -47,7 +47,6 @@ router.post('/register', async (req, res) => {
 
 // POST /auth/login
 router.post('/login', async (req, res) => {
-  console.log('POST /auth/login called with body:', req.body);
   const { email, password } = req.body;
 
   // Basic input validation
