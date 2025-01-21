@@ -1,14 +1,7 @@
 
-// backend/scripts/seedAdmin.js
-
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+// scripts/seedAdmin.js
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
-const connectDB = require('../config/db');
-
-// Load environment variables
-dotenv.config({ path: process.env.NODE_ENV === 'cypress' ? '.env.cypress' : '.env' });
 
 async function seedAdmin() {
   try {
@@ -31,9 +24,6 @@ async function seedAdmin() {
     const hashedPassword = await bcrypt.hash(INITIAL_ADMIN_PASSWORD, 10);
     console.log('Hashed Admin Password:', hashedPassword);
 
-    console.log(INITIAL_ADMIN_PASSWORD)
-    console.log(INITIAL_ADMIN_USERNAME)
-
     // Create the initial admin user
     const newAdmin = new User({
       username: INITIAL_ADMIN_USERNAME,
@@ -50,9 +40,5 @@ async function seedAdmin() {
   }
 }
 
-// Execute the seedAdmin function if this script is run directly
-if (require.main === module) {
-  seedAdmin().then(() => process.exit(0)).catch(() => process.exit(1));
-}
-
 module.exports = seedAdmin;
+
