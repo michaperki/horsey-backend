@@ -1,4 +1,6 @@
 
+// backend/models/User.js
+
 const mongoose = require('mongoose');
 
 const LichessRatingsSchema = new mongoose.Schema({
@@ -37,6 +39,15 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 1000, // Starting balance for users
     },
+    karma: { // New field
+      type: Number,
+      default: 0,
+    },
+    membership: { // New field
+      type: String,
+      enum: ['Free', 'Premium'],
+      default: 'Free',
+    },
     notificationPreferences: {
       email: {
         type: Boolean,
@@ -70,8 +81,6 @@ const UserSchema = new mongoose.Schema(
       type: LichessRatingsSchema, // New field to store ratings
       default: {}, // Initialize as empty object
     },
-    // **Removed Ethereum Address Field**
-    // ethereumAddress: { ... } // Removed or not used
   },
   { timestamps: true }
 );

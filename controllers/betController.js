@@ -100,22 +100,35 @@ const getBetHistory = async (req, res) => {
  */
 const getAvailableSeekers = async (req, res) => {
   try {
-    // Fetch all pending bets and populate creatorId with username and balance
+    // Fetch all pending bets; include lichessRatings from creator
     const pendingBets = await Bet.find({ status: 'pending' })
-      .populate('creatorId', 'username balance');
+      .populate('creatorId', 'username balance lichessRatings');
 
-    // Map the data to include creatorColor
-    const seekers = pendingBets.map((bet) => ({
-      id: bet._id,
-      creator: bet.creatorId ? bet.creatorId.username : 'Unknown',
-      creatorBalance: bet.creatorId ? bet.creatorId.balance : 0,
-      wager: bet.amount,
-      gameType: 'Standard',
-      colorPreference: bet.creatorColor, // Include colorPreference
-      createdAt: bet.createdAt,
-    }));
+    const seekers = pendingBets.map((bet) => {
+      // Extract and compute the creator's average Lichess rating
+      const ratings = bet.creatorId.lichessRatings || {};
+      const ratingValues = Object.values(ratings).filter((r) => r != null);
+      const averageRating =
+        ratingValues.length > 0
+          ? Math.round(ratingValues.reduce((a, b) => a + b, 0) / ratingValues.length)
+          : null;
 
-    res.json(seekers);
+      return {
+        id: bet._id,
+        creator: bet.creatorId.username,
+        creatorBalance: bet.creatorId.balance,
+        averageRating,
+        colorPreference: bet.creatorColor,
+        timeControl: bet.timeControl,
+        variant: bet.variant,
+        wager: bet.amount,
+        players: 2, // or more if it's a multiplayer format
+        createdAt: bet.createdAt,
+      };
+    });
+
+    // Return an object with `seekers` array (so we can do `data.seekers` in frontend)
+    res.json({ seekers });
   } catch (error) {
     console.error('Error fetching seekers:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred while fetching seekers.' });
@@ -126,54 +139,45 @@ const getAvailableSeekers = async (req, res) => {
  * Places a new bet with an expiration time (e.g., 30 minutes).
  */
 const placeBet = async (req, res) => {
-  const { colorPreference = 'random', amount, timeControl = '5|3' } = req.body;
+  const { colorPreference = 'random', amount, timeControl = '5|3', variant = 'standard' } = req.body;
   const creatorId = req.user.id;
-  console.log("Placing bet as user:", creatorId);
 
-  // Input validation
+  // Basic validations
+  const validVariants = ['standard', 'crazyhouse', 'fischer_random'];
   if (!['white', 'black', 'random'].includes(colorPreference)) {
     return res.status(400).json({ error: 'colorPreference must be "white", "black", or "random"' });
   }
-
-  if (amount == null || amount <= 0) {
+  if (!validVariants.includes(variant)) {
+    return res.status(400).json({ error: `variant must be one of: ${validVariants.join(', ')}` });
+  }
+  if (!amount || amount <= 0) {
     return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+  if (!timeControl || !/^\d+\|\d+$/.test(timeControl)) {
+    return res.status(400).json({ error: 'timeControl must be in the format "minutes|increment"' });
   }
 
   try {
-    // Fetch user to check balance
     const user = await User.findById(creatorId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Check if user has sufficient balance
+    if (!user) return res.status(404).json({ error: 'User not found' });
     if (user.balance < amount) {
       return res.status(400).json({ error: 'Insufficient token balance' });
     }
-
-    // Deduct the bet amount from user's balance
     user.balance -= amount;
     await user.save();
 
-    // Define expiration period (30 minutes in this example)
-    const EXPIRATION_PERIOD_MS = 30 * 60 * 1000; // 30 minutes
-    const expiresAt = new Date(Date.now() + EXPIRATION_PERIOD_MS);
-
-    // Create a new Bet instance with status 'matched' and set gameId when game is created
     const newBet = new Bet({
       creatorId,
       creatorColor: colorPreference,
       amount,
       timeControl,
-      status: 'pending', // Status set to 'matched' to indicate it's ready for processing
-      // gameId will be set when the game is created
-      expiresAt,
+      variant,
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
     });
-
-    // Save the bet to the database
     await newBet.save();
 
-    // Emit a 'betCreated' event to the creator's room
+    // Optional socket event
     const io = req.app.get('io');
     io.to(creatorId.toString()).emit('betCreated', {
       message: 'Your bet has been placed successfully!',
@@ -182,15 +186,15 @@ const placeBet = async (req, res) => {
         creatorColor: newBet.creatorColor,
         amount: newBet.amount,
         timeControl: newBet.timeControl,
+        variant: newBet.variant,
         createdAt: newBet.createdAt,
-        gameLink: newBet.gameLink || null, // Initially null
       },
     });
 
-    res.status(201).json({ message: 'Bet placed successfully', bet: newBet });
+    return res.status(201).json({ message: 'Bet placed successfully', bet: newBet });
   } catch (error) {
     console.error('Error placing bet:', error.message);
-    res.status(500).json({ error: 'Server error while placing bet' });
+    return res.status(500).json({ error: 'Server error while placing bet' });
   }
 };
 
@@ -280,6 +284,7 @@ const acceptBet = async (req, res) => {
         // Create the Lichess game using the Lichess Service
         const lichessResponse = await createLichessGame(
             bet.timeControl,
+            bet.variant, // Pass the variant
             whiteUser.lichessAccessToken,
             blackUser.lichessAccessToken,
             getUsernameFromAccessToken
@@ -314,6 +319,7 @@ const acceptBet = async (req, res) => {
                 creatorColor: bet.creatorColor,
                 amount: bet.amount,
                 timeControl: bet.timeControl,
+                variant: bet.variant, // Include variant
                 status: bet.status,
                 gameLink: bet.gameLink,
             },
@@ -329,6 +335,7 @@ const acceptBet = async (req, res) => {
                 creatorColor: bet.creatorColor,
                 amount: bet.amount,
                 timeControl: bet.timeControl,
+                variant: bet.variant, // Include variant
                 status: bet.status,
                 gameLink: bet.gameLink,
             },

@@ -56,6 +56,11 @@ const BetSchema = new mongoose.Schema(
             type: String,
             default: '5|3',
         },
+        variant: { // **New Field**
+            type: String,
+            enum: ['standard', 'crazyhouse', 'fischer_random'], // Add more variants as needed
+            default: 'standard',
+        },
         expiresAt: {
             type: Date,
             default: null,
@@ -72,4 +77,3 @@ BetSchema.index({ amount: 1 });
 BetSchema.index({ expiresAt: 1 });
 
 module.exports = mongoose.model('Bet', BetSchema);
-
