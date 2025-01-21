@@ -65,7 +65,7 @@ const initiateLichessOAuth = (req, res) => {
   });
 
   // Define the scope; adjust as necessary
-  const scope = LICHESS_SCOPES || 'challenge:write';
+  const scope = LICHESS_SCOPES || 'account challenge:write';
 
   // Construct the authorization URL
   const authorizationUrl = `https://lichess.org/oauth/authorize?${qs.stringify({
@@ -92,16 +92,13 @@ const initiateLichessOAuth = (req, res) => {
 const handleLichessCallback = async (req, res) => {
   const { code, state } = req.query;
 
-  // Logging for debugging
   console.log('Received OAuth callback with code:', code, 'and state:', state);
 
-  // Check for missing parameters
   if (!code || !state) {
     console.error('Missing code or state parameter.');
     return res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=error&message=${encodeURIComponent('Missing code or state parameter')}`);
   }
 
-  // Retrieve OAuth data from the store using the state parameter
   const oauthData = oauthStore.get(state);
 
   if (!oauthData) {
@@ -111,8 +108,7 @@ const handleLichessCallback = async (req, res) => {
 
   const { userId, codeVerifier, createdAt } = oauthData;
 
-  // Optional: Implement state expiration (e.g., 10 minutes)
-  const STATE_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes in milliseconds
+  const STATE_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes
   if (Date.now() - createdAt > STATE_EXPIRATION_TIME) {
     oauthStore.delete(state);
     console.error('State parameter has expired.');
@@ -126,7 +122,7 @@ const handleLichessCallback = async (req, res) => {
       throw new Error('Lichess client secret is not configured.');
     }
 
-    // Exchange authorization code for access token
+    // Exchange code for tokens
     const tokenResponse = await axios.post(
       'https://lichess.org/api/token',
       qs.stringify({
@@ -134,8 +130,8 @@ const handleLichessCallback = async (req, res) => {
         code,
         redirect_uri: LICHESS_REDIRECT_URI,
         client_id: LICHESS_CLIENT_ID,
-        client_secret: LICHESS_CLIENT_SECRET, // Include client_secret as required
-        code_verifier: codeVerifier, // Include the code_verifier for PKCE
+        client_secret: LICHESS_CLIENT_SECRET,
+        code_verifier: codeVerifier,
       }),
       {
         headers: {
@@ -146,7 +142,7 @@ const handleLichessCallback = async (req, res) => {
 
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
-    // Fetch user profile from Lichess
+    // Fetch user profile
     const profileResponse = await axios.get('https://lichess.org/api/account', {
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -155,42 +151,47 @@ const handleLichessCallback = async (req, res) => {
 
     const { id, username, perfs } = profileResponse.data;
 
-    // Extract ratings from perfs
+    // Log the perfs object for debugging
+    console.log(`Fetched perfs for user ${username}:`, JSON.stringify(perfs, null, 2));
+
+    // Extract ratings with validation
+    const isValidRating = (rating) => typeof rating === 'number' && rating > 0;
+
     const extractedRatings = {
-      bullet: perfs.bullet ? perfs.bullet.rating : null,
-      blitz: perfs.blitz ? perfs.blitz.rating : null,
-      rapid: perfs.rapid ? perfs.rapid.rating : null,
-      classical: perfs.classical ? perfs.classical.rating : null,
+      bullet: isValidRating(perfs.bullet?.rating) ? perfs.bullet.rating : null,
+      blitz: isValidRating(perfs.blitz?.rating) ? perfs.blitz.rating : null,
+      rapid: isValidRating(perfs.rapid?.rating) ? perfs.rapid.rating : null,
+      classical: isValidRating(perfs.classical?.rating) ? perfs.classical.rating : null,
       // Add other rating types as needed
     };
 
-    // Update the user's Lichess information in the database
+    // Log the extracted ratings
+    console.log(`Extracted Ratings for user ${username}:`, extractedRatings);
+
+    // Update user in the database
     await User.findByIdAndUpdate(userId, {
       lichessId: id,
       lichessUsername: username,
       lichessAccessToken: access_token,
       lichessRefreshToken: refresh_token,
-      lichessConnectedAt: new Date(), // Set the connection timestamp
-      lichessRatings: extractedRatings, // Assign only numeric ratings
+      lichessConnectedAt: new Date(),
+      lichessRatings: extractedRatings,
     });
 
-    // Clear the OAuth data from the store
+    // Clean up OAuth store
     oauthStore.delete(state);
 
-    // Logging for debugging
     console.log(`User ${userId} connected Lichess account: ${username}`);
 
-    // Redirect back to frontend with success query parameter
+    // Redirect to frontend with success
     res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=connected`);
   } catch (error) {
-    // Clear the OAuth data from the store in case of error
     oauthStore.delete(state);
 
     console.error('Error during Lichess OAuth callback:', error.response?.data || error.message);
     return res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=error&message=${encodeURIComponent('Failed to complete Lichess OAuth')}`);
   }
 };
-
 /**
  * Validates the result of a game and updates related bets.
  */

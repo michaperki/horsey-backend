@@ -107,7 +107,9 @@ const getAvailableSeekers = async (req, res) => {
 
     const seekers = pendingBets.map((bet) => {
       const ratings = bet.creatorId.lichessRatings || {};
-      const ratingValues = Object.values(ratings).filter((r) => r != null);
+      const ratingValues = Object.values(ratings)
+        .filter((r) => typeof r === 'number' && !isNaN(r));
+
       const averageRating =
         ratingValues.length > 0
           ? Math.round(ratingValues.reduce((a, b) => a + b, 0) / ratingValues.length)
