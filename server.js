@@ -8,6 +8,7 @@ const paymentsRoutes = require('./routes/payments');
 const lichessRoutes = require('./routes/lichess');
 const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes');
+const leaderboardRoutes = require('./routes/leaderboard')
 const testEmailRoutes = require('./routes/testEmail');
 const resetDatabaseRoutes = require('./routes/resetDatabase');
 const testUtilsRoutes = require('./routes/testUtils');
@@ -57,6 +58,7 @@ app.use('/lichess', lichessRoutes);
 app.use('/tokens', tokenRoutes);
 app.use('/bets', betRoutes);
 app.use('/email', testEmailRoutes);
+app.use('/leaderboard', leaderboardRoutes);
 
 // Test-only routes
 if (process.env.NODE_ENV === 'cypress') {
