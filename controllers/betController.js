@@ -100,12 +100,12 @@ const getBetHistory = async (req, res) => {
  */
 const getAvailableSeekers = async (req, res) => {
   try {
-    // Fetch all pending bets; include lichessRatings from creator
     const pendingBets = await Bet.find({ status: 'pending' })
       .populate('creatorId', 'username balance lichessRatings');
 
+    console.log("Available Bets:", pendingBets);
+
     const seekers = pendingBets.map((bet) => {
-      // Extract and compute the creator's average Lichess rating
       const ratings = bet.creatorId.lichessRatings || {};
       const ratingValues = Object.values(ratings).filter((r) => r != null);
       const averageRating =
@@ -122,12 +122,12 @@ const getAvailableSeekers = async (req, res) => {
         timeControl: bet.timeControl,
         variant: bet.variant,
         wager: bet.amount,
-        players: 2, // or more if it's a multiplayer format
+        players: 2,
         createdAt: bet.createdAt,
       };
     });
 
-    // Return an object with `seekers` array (so we can do `data.seekers` in frontend)
+    console.log("Seekers Sent to Frontend:", seekers);
     res.json({ seekers });
   } catch (error) {
     console.error('Error fetching seekers:', error.message);
@@ -139,11 +139,11 @@ const getAvailableSeekers = async (req, res) => {
  * Places a new bet with an expiration time (e.g., 30 minutes).
  */
 const placeBet = async (req, res) => {
-  const { colorPreference = 'random', amount, timeControl = '5|3', variant = 'standard' } = req.body;
+  const { colorPreference, amount, timeControl, variant } = req.body;
   const creatorId = req.user.id;
 
   // Basic validations
-  const validVariants = ['standard', 'crazyhouse', 'fischer_random'];
+  const validVariants = ['standard', 'crazyhouse', 'chess960'];
   if (!['white', 'black', 'random'].includes(colorPreference)) {
     return res.status(400).json({ error: 'colorPreference must be "white", "black", or "random"' });
   }

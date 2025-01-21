@@ -58,7 +58,7 @@ const BetSchema = new mongoose.Schema(
         },
         variant: { // **New Field**
             type: String,
-            enum: ['standard', 'crazyhouse', 'fischer_random'], // Add more variants as needed
+            enum: ['standard', 'crazyhouse', 'chess960'], // Add more variants as needed
             default: 'standard',
         },
         expiresAt: {
