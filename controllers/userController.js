@@ -61,5 +61,25 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-module.exports = { getUserProfile };
+
+/**
+ * Get authenticated user's data, including notifications.
+ */
+const getUserData = async (req, res) => {
+  try {
+    const userId = req.user.id; // Assuming authenticateToken sets req.user
+    const user = await User.findById(userId).select('notifications'); // Adjust fields as needed
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ notifications: user.notifications || 0 });
+  } catch (error) {
+    console.error('Error fetching user data:', error.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+module.exports = { getUserProfile, getUserData };
 

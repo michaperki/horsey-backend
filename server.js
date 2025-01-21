@@ -9,6 +9,7 @@ dotenv.config();
 
 const adminAuthRoutes = require('./routes/adminAuth');
 const userAuthRoutes = require('./routes/userAuth');
+const userRoutes = require('./routes/user');
 const paymentsRoutes = require('./routes/payments');
 const lichessRoutes = require('./routes/lichess');
 const tokenRoutes = require('./routes/tokenRoutes');
@@ -53,6 +54,7 @@ app.use(session({
 
 // Routes
 app.use('/auth', userAuthRoutes);
+app.use('/user', userRoutes);
 app.use('/auth/admin', adminAuthRoutes);
 app.use('/payments', paymentsRoutes);
 app.use('/lichess', lichessRoutes);
