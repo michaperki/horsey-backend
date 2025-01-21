@@ -9,7 +9,7 @@ const { authenticateToken } = require('../middleware/authMiddleware');
 const { getUserProfile } = require('../controllers/userController');
 dotenv.config();
 
-// POST /auth/user/register
+// POST /auth/register
 router.post('/register', async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -45,8 +45,9 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /auth/user/login
+// POST /auth/login
 router.post('/login', async (req, res) => {
+  console.log('POST /auth/login called with body:', req.body);
   const { email, password } = req.body;
 
   // Basic input validation
