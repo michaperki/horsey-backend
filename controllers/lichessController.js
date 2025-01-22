@@ -308,7 +308,8 @@ const validateResultHandler = async (req, res) => {
 const getLichessStatus = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await User.findById(userId);
+    // Explicitly select lichessAccessToken
+    const user = await User.findById(userId).select('+lichessAccessToken');
 
     if (!user) {
       return res.status(200).json({

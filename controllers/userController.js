@@ -10,7 +10,7 @@ const Bet = require('../models/Bet'); // Assuming Bet model holds game data
 const getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id; // Ensure authenticateToken middleware sets req.user
-    const user = await User.findById(userId).select('-password'); // Exclude sensitive fields
+    const user = await User.findById(userId).select('-password +lichessAccessToken');
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -68,7 +68,7 @@ const getUserProfile = async (req, res) => {
 const getUserData = async (req, res) => {
   try {
     const userId = req.user.id; // Assuming authenticateToken sets req.user
-    const user = await User.findById(userId).select('notifications'); // Adjust fields as needed
+    const user = await User.findById(userId).select('+lichessAccessToken notifications');
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
