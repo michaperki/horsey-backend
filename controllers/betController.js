@@ -114,7 +114,7 @@ const mapTimeControlToRatingCategory = (minutes) => {
 const getAvailableSeekers = async (req, res) => {
   try {
     const pendingBets = await Bet.find({ status: 'pending' })
-      .populate('creatorId', 'username balance lichessRatings');
+      .populate('creatorId', 'username balance lichessRatings lichessUsername'); // Include lichessUsername
 
     console.log("Available Bets:", pendingBets);
 
@@ -133,6 +133,7 @@ const getAvailableSeekers = async (req, res) => {
         return {
           id: bet._id,
           creator: bet.creatorId.username,
+          creatorLichessUsername: bet.creatorId.lichessUsername, // Add lichessUsername
           creatorBalance: bet.creatorId.balance,
           rating: null,
           colorPreference: bet.creatorColor,
@@ -148,12 +149,6 @@ const getAvailableSeekers = async (req, res) => {
       // Determine the appropriate rating category based on timeControl
       const ratingCategory = mapTimeControlToRatingCategory(minutes);
 
-      // Log mapping details
-      console.log(`Bet ID: ${bet._id}`);
-      console.log(`Variant: ${variant}`);
-      console.log(`Time Control: ${timeControl}`);
-      console.log(`Mapped Rating Category: ${ratingCategory}`);
-
       // Fetch the relevant rating based on variant and ratingCategory
       let relevantRating = null;
       if (variant.toLowerCase() === 'standard') {
@@ -166,12 +161,10 @@ const getAvailableSeekers = async (req, res) => {
           : null;
       }
 
-      // Log fetched rating
-      console.log(`Fetched Rating for Bet ID ${bet._id}: ${relevantRating}`);
-
       return {
         id: bet._id,
         creator: bet.creatorId.username,
+        creatorLichessUsername: bet.creatorId.lichessUsername, // Add lichessUsername
         creatorBalance: bet.creatorId.balance,
         rating: relevantRating, // Use relevantRating based on variant and time control
         colorPreference: bet.creatorColor,
