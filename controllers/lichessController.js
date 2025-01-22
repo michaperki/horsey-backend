@@ -1,3 +1,4 @@
+
 // backend/controllers/lichessController.js
 
 const axios = require('axios');
@@ -65,7 +66,7 @@ const initiateLichessOAuth = (req, res) => {
   });
 
   // Define the scope; adjust as necessary
-  const scope = LICHESS_SCOPES || 'account challenge:write';
+  const scope = LICHESS_SCOPES || 'openid email offline_access';
 
   // Construct the authorization URL
   const authorizationUrl = `https://lichess.org/oauth/authorize?${qs.stringify({
@@ -84,6 +85,61 @@ const initiateLichessOAuth = (req, res) => {
 
   // Redirect the user to Lichess OAuth authorization page
   res.redirect(authorizationUrl);
+};
+
+/**
+ * Maps Lichess perfs to the application's lichessRatings schema.
+ */
+const mapPerfsToRatings = (perfs) => {
+  const ratings = {
+    standard: {},
+    variants: {}
+  };
+
+  // Define standard time controls
+  const standardTimeControls = [
+    'ultraBullet',
+    'bullet',
+    'blitz',
+    'rapid',
+    'classical',
+    'correspondence'
+  ];
+
+  // Define recognized variants
+  const recognizedVariants = [
+    'chess960',
+    'kingOfTheHill',
+    'threeCheck',
+    'antichess',
+    'atomic',
+    'horde',
+    'racingKings',
+    'crazyhouse',
+    // Add other variants as needed
+  ];
+
+  // Iterate over each perf in perfs
+  for (const [key, value] of Object.entries(perfs)) {
+    if (!value || typeof value.rating !== 'number') {
+      // Skip entries without a valid rating
+      continue;
+    }
+
+    if (standardTimeControls.includes(key)) {
+      // Handle standard time controls
+      ratings.standard[key] = value.rating;
+    } else if (recognizedVariants.includes(key)) {
+      // Handle variants with overall ratings
+      ratings.variants[key] = value.rating;
+    } else {
+      // Handle unexpected variants or formats
+      console.warn(`Unexpected perf key: ${key}. Skipping.`);
+      continue; // Skip unexpected entries
+    }
+  }
+
+  return ratings;
 };
 
 /**
@@ -122,7 +178,7 @@ const handleLichessCallback = async (req, res) => {
       throw new Error('Lichess client secret is not configured.');
     }
 
-    // Exchange code for tokens
+    // Exchange authorization code for tokens
     const tokenResponse = await axios.post(
       'https://lichess.org/api/token',
       qs.stringify({
@@ -142,7 +198,7 @@ const handleLichessCallback = async (req, res) => {
 
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
-    // Fetch user profile
+    // Fetch user profile from Lichess
     const profileResponse = await axios.get('https://lichess.org/api/account', {
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -151,47 +207,40 @@ const handleLichessCallback = async (req, res) => {
 
     const { id, username, perfs } = profileResponse.data;
 
-    // Log the perfs object for debugging
+    // Log the entire perfs object for debugging
     console.log(`Fetched perfs for user ${username}:`, JSON.stringify(perfs, null, 2));
 
-    // Extract ratings with validation
-    const isValidRating = (rating) => typeof rating === 'number' && rating > 0;
+    const extractedRatings = mapPerfsToRatings(perfs);
 
-    const extractedRatings = {
-      bullet: isValidRating(perfs.bullet?.rating) ? perfs.bullet.rating : null,
-      blitz: isValidRating(perfs.blitz?.rating) ? perfs.blitz.rating : null,
-      rapid: isValidRating(perfs.rapid?.rating) ? perfs.rapid.rating : null,
-      classical: isValidRating(perfs.classical?.rating) ? perfs.classical.rating : null,
-      // Add other rating types as needed
-    };
+    // Log the extracted ratings for verification
+    console.log(`Extracted Ratings for user ${username}:`, JSON.stringify(extractedRatings, null, 2));
 
-    // Log the extracted ratings
-    console.log(`Extracted Ratings for user ${username}:`, extractedRatings);
-
-    // Update user in the database
+    // Update the user's Lichess information in the database
     await User.findByIdAndUpdate(userId, {
       lichessId: id,
       lichessUsername: username,
       lichessAccessToken: access_token,
       lichessRefreshToken: refresh_token,
-      lichessConnectedAt: new Date(),
-      lichessRatings: extractedRatings,
+      lichessConnectedAt: new Date(), // Set the connection timestamp
+      lichessRatings: extractedRatings, // Assign mapped ratings
     });
 
-    // Clean up OAuth store
+    // Clear the OAuth data from the store
     oauthStore.delete(state);
 
     console.log(`User ${userId} connected Lichess account: ${username}`);
 
-    // Redirect to frontend with success
+    // Redirect back to frontend with success query parameter
     res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=connected`);
   } catch (error) {
+    // Clear the OAuth data from the store in case of error
     oauthStore.delete(state);
 
     console.error('Error during Lichess OAuth callback:', error.response?.data || error.message);
     return res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=error&message=${encodeURIComponent('Failed to complete Lichess OAuth')}`);
   }
 };
+
 /**
  * Validates the result of a game and updates related bets.
  */
@@ -266,7 +315,7 @@ const getLichessStatus = async (req, res) => {
         username: null,
         ratings: {},
         connectedAt: null, 
-        connected: fals
+        connected: false
       });
     }
 
@@ -301,16 +350,36 @@ const getLichessUser = async (req, res) => {
 
     // Ensure ratings object exists and handle missing ratings gracefully
     const lichessRatings = user.lichessRatings || {};
-    const ratings = {
-      bullet: lichessRatings.bullet || 'N/A',
-      blitz: lichessRatings.blitz || 'N/A',
-      rapid: lichessRatings.rapid || 'N/A',
-      classical: lichessRatings.classical || 'N/A',
-    };
+
+    // Prepare standard ratings
+    const standardRatings = lichessRatings.standard || {};
+
+    // Prepare variant ratings
+    const variantRatings = lichessRatings.variants || {};
 
     res.status(200).json({
       username: user.lichessUsername || 'N/A',
-      ratings, // Include all ratings
+      ratings: {
+        standard: {
+          ultraBullet: standardRatings.ultraBullet || 'N/A',
+          bullet: standardRatings.bullet || 'N/A',
+          blitz: standardRatings.blitz || 'N/A',
+          rapid: standardRatings.rapid || 'N/A',
+          classical: standardRatings.classical || 'N/A',
+          correspondence: standardRatings.correspondence || 'N/A',
+        },
+        variants: {
+          chess960: variantRatings.chess960 || 'N/A',
+          kingOfTheHill: variantRatings.kingOfTheHill || 'N/A',
+          threeCheck: variantRatings.threeCheck || 'N/A',
+          antichess: variantRatings.antichess || 'N/A',
+          atomic: variantRatings.atomic || 'N/A',
+          horde: variantRatings.horde || 'N/A',
+          racingKings: variantRatings.racingKings || 'N/A',
+          crazyhouse: variantRatings.crazyhouse || 'N/A',
+          // Add other variants as needed
+        },
+      }, // Include all ratings with variants
       connectedAt: user.lichessConnectedAt || null, // Provide connection timestamp if available
     });
   } catch (error) {
@@ -341,7 +410,10 @@ const disconnectLichessAccountHandler = async (req, res) => {
     user.lichessAccessToken = null;
     user.lichessRefreshToken = null;
     user.lichessConnectedAt = null;
-    user.lichessRatings = {};
+    user.lichessRatings = {
+      standard: {},
+      variants: {}
+    };
 
     await user.save();
 
@@ -363,3 +435,4 @@ module.exports = {
   getLichessUser,
   disconnectLichessAccountHandler
 };
+

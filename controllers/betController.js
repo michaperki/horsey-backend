@@ -96,8 +96,21 @@ const getBetHistory = async (req, res) => {
 };
 
 /**
- * Retrieves all available game seekers (pending bets).
+ * Maps timeControl to ratingCategory based on predefined rules.
+ * Adjust the thresholds as per your application's requirements.
  */
+const mapTimeControlToRatingCategory = (minutes) => {
+  if (minutes <= 3) {
+    return 'bullet';
+  } else if (minutes <= 5) {
+    return 'blitz';
+  } else if (minutes <= 15) {
+    return 'rapid';
+  } else {
+    return 'classical';
+  }
+};
+
 const getAvailableSeekers = async (req, res) => {
   try {
     const pendingBets = await Bet.find({ status: 'pending' })
@@ -106,26 +119,68 @@ const getAvailableSeekers = async (req, res) => {
     console.log("Available Bets:", pendingBets);
 
     const seekers = pendingBets.map((bet) => {
+      const { timeControl, variant } = bet;
       const ratings = bet.creatorId.lichessRatings || {};
-      const ratingValues = Object.values(ratings)
-        .filter((r) => typeof r === 'number' && !isNaN(r));
 
-      const averageRating =
-        ratingValues.length > 0
-          ? Math.round(ratingValues.reduce((a, b) => a + b, 0) / ratingValues.length)
+      // Split timeControl into minutes and increment
+      const [minutesStr, incrementStr] = timeControl.split('|');
+      const minutes = parseInt(minutesStr, 10);
+      const increment = parseInt(incrementStr, 10);
+
+      // Validate parsed values
+      if (isNaN(minutes) || isNaN(increment)) {
+        console.warn(`Invalid timeControl format for bet ID ${bet._id}: ${timeControl}`);
+        return {
+          id: bet._id,
+          creator: bet.creatorId.username,
+          creatorBalance: bet.creatorId.balance,
+          rating: null,
+          colorPreference: bet.creatorColor,
+          timeControl: bet.timeControl,
+          variant: bet.variant,
+          wager: bet.amount,
+          players: 2,
+          createdAt: bet.createdAt,
+          creatorRatings: bet.creatorId.lichessRatings, // Include lichessRatings
+        };
+      }
+
+      // Determine the appropriate rating category based on timeControl
+      const ratingCategory = mapTimeControlToRatingCategory(minutes);
+
+      // Log mapping details
+      console.log(`Bet ID: ${bet._id}`);
+      console.log(`Variant: ${variant}`);
+      console.log(`Time Control: ${timeControl}`);
+      console.log(`Mapped Rating Category: ${ratingCategory}`);
+
+      // Fetch the relevant rating based on variant and ratingCategory
+      let relevantRating = null;
+      if (variant.toLowerCase() === 'standard') {
+        relevantRating = ratings['standard'] && ratings['standard'][ratingCategory]
+          ? ratings['standard'][ratingCategory]
           : null;
+      } else {
+        relevantRating = ratings[variant.toLowerCase()] && ratings[variant.toLowerCase()].overall
+          ? ratings[variant.toLowerCase()].overall
+          : null;
+      }
+
+      // Log fetched rating
+      console.log(`Fetched Rating for Bet ID ${bet._id}: ${relevantRating}`);
 
       return {
         id: bet._id,
         creator: bet.creatorId.username,
         creatorBalance: bet.creatorId.balance,
-        averageRating,
+        rating: relevantRating, // Use relevantRating based on variant and time control
         colorPreference: bet.creatorColor,
         timeControl: bet.timeControl,
         variant: bet.variant,
         wager: bet.amount,
         players: 2,
         createdAt: bet.createdAt,
+        creatorRatings: bet.creatorId.lichessRatings, // Include lichessRatings
       };
     });
 
