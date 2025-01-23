@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Bet = require('../models/Bet'); // Assuming Bet model holds game data
 
 /**
- * Get the authenticated user's profile along with statistics.
+ * Get the authenticated user's profile along with updated statistics.
  */
 const getUserProfile = async (req, res) => {
   try {
@@ -28,7 +28,61 @@ const getUserProfile = async (req, res) => {
     const losses = await Bet.countDocuments({ creatorId: userId, status: 'lost' }) +
                    await Bet.countDocuments({ opponentId: userId, status: 'lost' });
 
-    const winPercentage = totalGames > 0 ? ((wins / totalGames) * 100).toFixed(2) : '0.00';
+    // Total Wagered
+    const totalWageredData = await Bet.aggregate([
+      {
+        $match: {
+          $or: [{ creatorId: userId }, { opponentId: userId }],
+          status: { $in: ['won', 'lost', 'draw'] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalWagered: { $sum: '$amount' },
+          averageWager: { $avg: '$amount' },
+        },
+      },
+    ]);
+
+    const totalWagered = totalWageredData[0]?.totalWagered || 0;
+    const averageWager = totalWageredData[0]?.averageWager || 0;
+
+    // Total Winnings and Losses
+    const totalWinningsData = await Bet.aggregate([
+      {
+        $match: {
+          $or: [{ creatorId: userId, status: 'won' }, { opponentId: userId, status: 'won' }],
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalWinnings: { $sum: '$winnings' }, // Assuming 'winnings' field exists
+        },
+      },
+    ]);
+
+    const totalWinnings = totalWinningsData[0]?.totalWinnings || 0;
+
+    const totalLossesData = await Bet.aggregate([
+      {
+        $match: {
+          $or: [{ creatorId: userId, status: 'lost' }, { opponentId: userId, status: 'lost' }],
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalLosses: { $sum: '$amount' }, // Assuming 'amount' represents the loss
+        },
+      },
+    ]);
+
+    const totalLosses = totalLossesData[0]?.totalLosses || 0;
+
+    // Calculate ROI
+    const averageROI = totalWagered > 0 ? ((totalWinnings - totalLosses) / totalWagered * 100).toFixed(2) : '0.00';
 
     // Assuming 'karma' and 'membership' are fields in User model
     const { karma, membership, balance } = user;
@@ -47,9 +101,11 @@ const getUserProfile = async (req, res) => {
       },
       statistics: {
         totalGames,
-        wins,
-        losses,
-        winPercentage,
+        averageWager,
+        totalWagered,
+        averageROI,
+        totalWinnings,
+        totalLosses,
         karma,
         membership,
         points: balance, // Assuming 'balance' represents points
@@ -60,7 +116,6 @@ const getUserProfile = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch user profile' });
   }
 };
-
 
 /**
  * Get authenticated user's data, including notifications.
