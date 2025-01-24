@@ -112,76 +112,73 @@ const mapTimeControlToRatingCategory = (minutes) => {
 };
 
 const getAvailableSeekers = async (req, res) => {
-  try {
-    const pendingBets = await Bet.find({ status: 'pending' })
-      .populate('creatorId', 'username tokenBalance sweepstakesBalance lichessRatings lichessUsername'); // Include lichessUsername and new balances
+  const { currencyType } = req.query; // Get currencyType from the request query
 
-    console.log("Available Bets:", pendingBets);
+  try {
+    const filter = { status: 'pending' };
+
+    // Add currencyType filter if provided
+    if (currencyType) {
+      filter.currencyType = currencyType;
+    }
+
+    const pendingBets = await Bet.find(filter)
+      .populate('creatorId', 'username tokenBalance sweepstakesBalance lichessRatings lichessUsername');
 
     const seekers = pendingBets.map((bet) => {
-      const { timeControl, variant, currencyType } = bet; // Include currencyType
+      const { timeControl, variant, currencyType } = bet;
       const ratings = bet.creatorId.lichessRatings || {};
 
-      // Split timeControl into minutes and increment
       const [minutesStr, incrementStr] = timeControl.split('|');
       const minutes = parseInt(minutesStr, 10);
       const increment = parseInt(incrementStr, 10);
 
-      // Validate parsed values
       if (isNaN(minutes) || isNaN(increment)) {
-        console.warn(`Invalid timeControl format for bet ID ${bet._id}: ${timeControl}`);
         return {
           id: bet._id,
           creator: bet.creatorId.username,
-          creatorLichessUsername: bet.creatorId.lichessUsername, // Add lichessUsername
-          tokenBalance: bet.creatorId.tokenBalance, // Updated balance field
-          sweepstakesBalance: bet.creatorId.sweepstakesBalance, // New balance field
+          creatorLichessUsername: bet.creatorId.lichessUsername,
+          tokenBalance: bet.creatorId.tokenBalance,
+          sweepstakesBalance: bet.creatorId.sweepstakesBalance,
           rating: null,
           colorPreference: bet.creatorColor,
           timeControl: bet.timeControl,
           variant: bet.variant,
-          currencyType, // Include currencyType
+          currencyType,
           wager: bet.amount,
           players: 2,
           createdAt: bet.createdAt,
-          creatorRatings: bet.creatorId.lichessRatings, // Include lichessRatings
+          creatorRatings: bet.creatorId.lichessRatings,
         };
       }
 
-      // Determine the appropriate rating category based on timeControl
       const ratingCategory = mapTimeControlToRatingCategory(minutes);
-
-      // Fetch the relevant rating based on variant and ratingCategory
       let relevantRating = null;
+
       if (variant.toLowerCase() === 'standard') {
-        relevantRating = ratings['standard'] && ratings['standard'][ratingCategory]
-          ? ratings['standard'][ratingCategory]
-          : null;
+        relevantRating = ratings['standard']?.[ratingCategory] || null;
       } else {
-        relevantRating = ratings[variant.toLowerCase()] && ratings[variant.toLowerCase()].overall
-          ? ratings[variant.toLowerCase()].overall
-          : null;
+        relevantRating = ratings[variant.toLowerCase()]?.overall || null;
       }
 
       return {
         id: bet._id,
         creator: bet.creatorId.username,
-        creatorLichessUsername: bet.creatorId.lichessUsername, // Add lichessUsername
-        tokenBalance: bet.creatorId.tokenBalance, // Updated balance field
-        sweepstakesBalance: bet.creatorId.sweepstakesBalance, // New balance field
-        rating: relevantRating, // Use relevantRating based on variant and time control
+        creatorLichessUsername: bet.creatorId.lichessUsername,
+        tokenBalance: bet.creatorId.tokenBalance,
+        sweepstakesBalance: bet.creatorId.sweepstakesBalance,
+        rating: relevantRating,
         colorPreference: bet.creatorColor,
         timeControl: bet.timeControl,
         variant: bet.variant,
-        currencyType, // Include currencyType
+        currencyType,
         wager: bet.amount,
         players: 2,
         createdAt: bet.createdAt,
-        creatorRatings: bet.creatorId.lichessRatings, // Include lichessRatings
+        creatorRatings: bet.creatorId.lichessRatings,
       };
     });
 
-    console.log("Seekers Sent to Frontend:", seekers);
     res.json({ seekers });
   } catch (error) {
     console.error('Error fetching seekers:', error.message);
