@@ -136,5 +136,26 @@ const getUserData = async (req, res) => {
   }
 };
 
-module.exports = { getUserProfile, getUserData };
+/**
+ * Retrieves the authenticated user's token and sweepstakes balances.
+ */
+const getUserBalances = async (req, res) => {
+  try {
+    const userId = req.user.id; // Ensure authentication middleware sets req.user
+    const user = await User.findById(userId).select('tokenBalance sweepstakesBalance');
 
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      tokenBalance: user.tokenBalance,
+      sweepstakesBalance: user.sweepstakesBalance,
+    });
+  } catch (error) {
+    console.error('Error fetching user balances:', error.message);
+    res.status(500).json({ error: 'Failed to fetch user balances' });
+  }
+};
+
+module.exports = { getUserProfile, getUserData, getUserBalances };

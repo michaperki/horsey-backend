@@ -46,6 +46,12 @@ const BetSchema = new mongoose.Schema(
             required: true,
             min: [1, 'Bet amount must be at least 1'],
         },
+        // **New Field: currencyType**
+        currencyType: { // Added currencyType
+            type: String,
+            enum: ['token', 'sweepstakes'], // Allowed currencies
+            default: 'token',
+        },
         status: {
             type: String,
             enum: ['pending', 'matched', 'won', 'lost', 'canceled', 'expired', 'draw'], // Added 'draw'
@@ -77,3 +83,4 @@ BetSchema.index({ amount: 1 });
 BetSchema.index({ expiresAt: 1 });
 
 module.exports = mongoose.model('Bet', BetSchema);
+

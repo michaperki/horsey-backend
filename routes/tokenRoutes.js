@@ -4,6 +4,7 @@ const express = require("express");
 const router = express.Router();
 const tokenService = require("../services/tokenService");
 const { authenticateToken, authorizeRole } = require("../middleware/authMiddleware");
+const { getUserBalances } = require('../controllers/userController');
 const Bet = require('../models/Bet');
 const User = require('../models/User');
 
@@ -31,22 +32,8 @@ router.post("/mint", authenticateToken, authorizeRole('admin'), async (req, res)
 });
 
 // New Route to get current user's balance
-router.get("/balance/user", authenticateToken, async (req, res) => {
-  const userId = req.user.id;
+router.get('/balance/user', authenticateToken, getUserBalances);
 
-  try {
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    res.json({ balance: user.balance });
-  } catch (error) {
-    console.error('Error fetching user balance:', error.message);
-    res.status(500).json({ error: 'Server error while fetching balance' });
-  }
-});
 
 // Route to get token balance by address (Admin Only)
 router.get("/balance/:address", authenticateToken, authorizeRole('admin'), async (req, res) => {

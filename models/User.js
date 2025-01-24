@@ -80,9 +80,14 @@ const UserSchema = new mongoose.Schema(
       enum: ['user', 'admin'],
       default: 'user',
     },
-    balance: {
+    // **Updated Balance Fields**
+    tokenBalance: { // Renamed from 'balance'
       type: Number,
-      default: 1000, // Starting balance for users
+      default: 1000, // Starting token balance for users
+    },
+    sweepstakesBalance: { // New second balance
+      type: Number,
+      default: 0,    // Starting sweepstakes balance for users
     },
     karma: { // New field
       type: Number,

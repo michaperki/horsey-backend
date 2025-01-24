@@ -114,12 +114,12 @@ const mapTimeControlToRatingCategory = (minutes) => {
 const getAvailableSeekers = async (req, res) => {
   try {
     const pendingBets = await Bet.find({ status: 'pending' })
-      .populate('creatorId', 'username balance lichessRatings lichessUsername'); // Include lichessUsername
+      .populate('creatorId', 'username tokenBalance sweepstakesBalance lichessRatings lichessUsername'); // Include lichessUsername and new balances
 
     console.log("Available Bets:", pendingBets);
 
     const seekers = pendingBets.map((bet) => {
-      const { timeControl, variant } = bet;
+      const { timeControl, variant, currencyType } = bet; // Include currencyType
       const ratings = bet.creatorId.lichessRatings || {};
 
       // Split timeControl into minutes and increment
@@ -134,11 +134,13 @@ const getAvailableSeekers = async (req, res) => {
           id: bet._id,
           creator: bet.creatorId.username,
           creatorLichessUsername: bet.creatorId.lichessUsername, // Add lichessUsername
-          creatorBalance: bet.creatorId.balance,
+          tokenBalance: bet.creatorId.tokenBalance, // Updated balance field
+          sweepstakesBalance: bet.creatorId.sweepstakesBalance, // New balance field
           rating: null,
           colorPreference: bet.creatorColor,
           timeControl: bet.timeControl,
           variant: bet.variant,
+          currencyType, // Include currencyType
           wager: bet.amount,
           players: 2,
           createdAt: bet.createdAt,
@@ -165,11 +167,13 @@ const getAvailableSeekers = async (req, res) => {
         id: bet._id,
         creator: bet.creatorId.username,
         creatorLichessUsername: bet.creatorId.lichessUsername, // Add lichessUsername
-        creatorBalance: bet.creatorId.balance,
+        tokenBalance: bet.creatorId.tokenBalance, // Updated balance field
+        sweepstakesBalance: bet.creatorId.sweepstakesBalance, // New balance field
         rating: relevantRating, // Use relevantRating based on variant and time control
         colorPreference: bet.creatorColor,
         timeControl: bet.timeControl,
         variant: bet.variant,
+        currencyType, // Include currencyType
         wager: bet.amount,
         players: 2,
         createdAt: bet.createdAt,
@@ -189,16 +193,20 @@ const getAvailableSeekers = async (req, res) => {
  * Places a new bet with an expiration time (e.g., 30 minutes).
  */
 const placeBet = async (req, res) => {
-  const { colorPreference, amount, timeControl, variant } = req.body;
+  const { colorPreference, amount, timeControl, variant, currencyType } = req.body; // Include currencyType
   const creatorId = req.user.id;
 
   // Basic validations
   const validVariants = ['standard', 'crazyhouse', 'chess960'];
+  const validCurrencyTypes = ['token', 'sweepstakes']; // Define valid currency types
   if (!['white', 'black', 'random'].includes(colorPreference)) {
     return res.status(400).json({ error: 'colorPreference must be "white", "black", or "random"' });
   }
   if (!validVariants.includes(variant)) {
     return res.status(400).json({ error: `variant must be one of: ${validVariants.join(', ')}` });
+  }
+  if (!validCurrencyTypes.includes(currencyType)) { // Validate currencyType
+    return res.status(400).json({ error: `currencyType must be one of: ${validCurrencyTypes.join(', ')}` });
   }
   if (!amount || amount <= 0) {
     return res.status(400).json({ error: 'amount must be a positive number' });
@@ -210,16 +218,32 @@ const placeBet = async (req, res) => {
   try {
     const user = await User.findById(creatorId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.balance < amount) {
-      return res.status(400).json({ error: 'Insufficient token balance' });
+
+    // Determine which balance to use based on currencyType
+    let currentBalance;
+    if (currencyType === 'sweepstakes') {
+      currentBalance = user.sweepstakesBalance;
+    } else {
+      currentBalance = user.tokenBalance;
     }
-    user.balance -= amount;
+
+    if (currentBalance < amount) {
+      return res.status(400).json({ error: `Insufficient ${currencyType} balance` });
+    }
+
+    // Deduct from the appropriate balance
+    if (currencyType === 'sweepstakes') {
+      user.sweepstakesBalance -= amount;
+    } else {
+      user.tokenBalance -= amount;
+    }
     await user.save();
 
     const newBet = new Bet({
       creatorId,
       creatorColor: colorPreference,
       amount,
+      currencyType, // Store which currency was used
       timeControl,
       variant,
       status: 'pending',
@@ -235,6 +259,7 @@ const placeBet = async (req, res) => {
         id: newBet._id,
         creatorColor: newBet.creatorColor,
         amount: newBet.amount,
+        currencyType: newBet.currencyType, // Include currencyType in the event
         timeControl: newBet.timeControl,
         variant: newBet.variant,
         createdAt: newBet.createdAt,
@@ -280,20 +305,30 @@ const acceptBet = async (req, res) => {
 
         // Fetch opponent details
         const opponent = await User.findById(opponentId);
-
         if (!opponent) {
             await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
             return res.status(404).json({ error: 'Opponent user not found' });
         }
 
-        // Ensure opponent has enough balance
-        if (opponent.balance < bet.amount) {
-            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-            return res.status(400).json({ error: 'Insufficient balance to accept this bet' });
+        // Ensure opponent has enough balance based on bet's currencyType
+        let opponentCurrentBalance;
+        if (bet.currencyType === 'sweepstakes') {
+          opponentCurrentBalance = opponent.sweepstakesBalance;
+        } else {
+          opponentCurrentBalance = opponent.tokenBalance;
         }
 
-        // Deduct the bet amount from opponent's balance
-        opponent.balance -= bet.amount;
+        if (opponentCurrentBalance < bet.amount) {
+            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+            return res.status(400).json({ error: `Insufficient ${bet.currencyType} balance to accept this bet` });
+        }
+
+        // Deduct the bet amount from opponent's appropriate balance
+        if (bet.currencyType === 'sweepstakes') {
+          opponent.sweepstakesBalance -= bet.amount;
+        } else {
+          opponent.tokenBalance -= bet.amount;
+        }
         await opponent.save();
 
         // Determine final colors based on creator's color preference
@@ -323,7 +358,11 @@ const acceptBet = async (req, res) => {
         // Check if both users have connected their Lichess accounts
         if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
             // Roll back if tokens are missing
-            opponent.balance += bet.amount;
+            if (bet.currencyType === 'sweepstakes') {
+              opponent.sweepstakesBalance += bet.amount;
+            } else {
+              opponent.tokenBalance += bet.amount;
+            }
             await opponent.save();
             bet.status = 'pending';
             bet.opponentId = null;
@@ -342,7 +381,11 @@ const acceptBet = async (req, res) => {
 
         if (!lichessResponse.success) {
             // Roll back if creation fails
-            opponent.balance += bet.amount;
+            if (bet.currencyType === 'sweepstakes') {
+              opponent.sweepstakesBalance += bet.amount;
+            } else {
+              opponent.tokenBalance += bet.amount;
+            }
             await opponent.save();
             bet.status = 'pending';
             bet.opponentId = null;
@@ -368,6 +411,7 @@ const acceptBet = async (req, res) => {
                 opponentId: bet.opponentId,
                 creatorColor: bet.creatorColor,
                 amount: bet.amount,
+                currencyType: bet.currencyType, // Include currencyType
                 timeControl: bet.timeControl,
                 variant: bet.variant, // Include variant
                 status: bet.status,
@@ -384,6 +428,7 @@ const acceptBet = async (req, res) => {
                 opponentId: bet.opponentId,
                 creatorColor: bet.creatorColor,
                 amount: bet.amount,
+                currencyType: bet.currencyType, // Include currencyType
                 timeControl: bet.timeControl,
                 variant: bet.variant, // Include variant
                 status: bet.status,
@@ -425,9 +470,13 @@ const cancelBet = async (req, res) => {
       return res.status(400).json({ error: 'Bet not found or not in pending status' });
     }
 
-    // Restore user balance
+    // Restore user balance based on currencyType
     const user = await User.findById(userId);
-    user.balance += bet.amount;
+    if (bet.currencyType === 'sweepstakes') {
+      user.sweepstakesBalance += bet.amount;
+    } else {
+      user.tokenBalance += bet.amount;
+    }
     await user.save();
 
     return res.json({ message: 'Bet canceled successfully', bet });
@@ -438,3 +487,4 @@ const cancelBet = async (req, res) => {
 };
 
 module.exports = { getAvailableSeekers, getBetHistory, placeBet, acceptBet, cancelBet };
+
