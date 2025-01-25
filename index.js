@@ -15,7 +15,7 @@ dotenv.config();
 // Create HTTP server
 const server = http.createServer(app);
 
-// Initialize Socket.io
+// Initialize Socket.io with enhanced logging
 const io = initializeSocket(server);
 
 // Make io accessible in your routes/controllers via app locals
@@ -29,6 +29,7 @@ connectDB()
     // Seed the admin user after successful DB connection
     if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'cypress') {
       await seedAdmin();
+      console.log('Admin user seeded successfully.');
     }
 
     const PORT = process.env.PORT || 5000;
@@ -36,6 +37,7 @@ connectDB()
       console.log(`Backend server is running on port ${PORT}`);
       // Initialize the cron job
       startTrackingGames(); // Correctly invoke the function
+      console.log('Cron job for tracking games started.');
     });
   })
   .catch((error) => {
