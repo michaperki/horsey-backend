@@ -6,9 +6,12 @@ const router = express.Router();
 
 // GET /store/products
 router.get('/products', async (req, res) => {
+  const { category } = req.query; // Accept optional category filter
+
   try {
-    // Fetch all products from the database
-    const products = await Product.find();
+    // Fetch products, optionally filtered by category
+    const query = category ? { category } : {};
+    const products = await Product.find(query);
 
     // Check if there are no products
     if (!products || products.length === 0) {
@@ -26,3 +29,4 @@ router.get('/products', async (req, res) => {
 });
 
 module.exports = router;
+

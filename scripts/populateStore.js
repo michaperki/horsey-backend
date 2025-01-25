@@ -3,8 +3,6 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const Product = require('../models/Product');
 const connectDB = require('../config/db');
-const fs = require('fs');
-const path = require('path');
 
 // Load environment variables
 dotenv.config({ path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env' });
@@ -16,7 +14,7 @@ async function populateStore() {
   try {
     await connectDB();
 
-    // Predefined product offerings with image filenames
+    // Predefined product offerings with categories and image filenames
     const products = [
       {
         name: 'Basic Token Pack',
@@ -24,7 +22,8 @@ async function populateStore() {
         playerTokens: 1000,
         sweepstakesTokens: 100,
         description: 'Get 1000 Player Tokens and 100 Sweepstakes Tokens for $10.',
-        imageFileName: 'basic-token-pack.png'
+        imageFileName: 'basic-token-pack.png',
+        category: 'Starter Packs'
       },
       {
         name: 'Premium Token Pack',
@@ -32,7 +31,8 @@ async function populateStore() {
         playerTokens: 2500,
         sweepstakesTokens: 250,
         description: 'Get 2500 Player Tokens and 250 Sweepstakes Tokens for $25.',
-        imageFileName: 'premium-token-pack.png'
+        imageFileName: 'premium-token-pack.png',
+        category: 'Starter Packs'
       },
       {
         name: 'Deluxe Token Pack',
@@ -40,7 +40,8 @@ async function populateStore() {
         playerTokens: 5000,
         sweepstakesTokens: 500,
         description: 'Get 5000 Player Tokens and 500 Sweepstakes Tokens for $50.',
-        imageFileName: 'deluxe-token-pack.png'
+        imageFileName: 'deluxe-token-pack.png',
+        category: 'Premium Packs'
       },
       {
         name: 'Ultimate Token Pack',
@@ -48,15 +49,16 @@ async function populateStore() {
         playerTokens: 10000,
         sweepstakesTokens: 1000,
         description: 'Get 10000 Player Tokens and 1000 Sweepstakes Tokens for $100.',
-        imageFileName: 'ultimate-token-pack.png'
+        imageFileName: 'ultimate-token-pack.png',
+        category: 'Premium Packs'
       }
     ];
 
-    // Insert the predefined products into the Product collection
+    // Remove existing products and insert the new ones
+    await Product.deleteMany({});
     const insertResult = await Product.insertMany(products);
 
     console.log(`Store populated with ${insertResult.length} products.`);
-
     mongoose.connection.close();
   } catch (error) {
     console.error('Error during population:', error);
