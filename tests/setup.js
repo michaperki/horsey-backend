@@ -1,18 +1,26 @@
+
 // backend/tests/setup.js
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
 
-let mongoServer;
+let replSet;
 
 module.exports.connect = async () => {
   if (mongoose.connection.readyState === 1) {
     return; // Already connected
   }
 
-  mongoServer = await MongoMemoryServer.create();
-  const uri = mongoServer.getUri();
+  replSet = await MongoMemoryReplSet.create({
+    replSet: { count: 1 }, // Single node replica set
+  });
 
-  await mongoose.connect(uri); // Simplified connection
+  const uri = replSet.getUri();
+
+  await mongoose.connect(uri);
+
+  const admin = new mongoose.mongo.Admin(mongoose.connection.db);
+  const info = await admin.replSetGetStatus();
+  console.log('Replica Set Status:', info);
 };
 
 module.exports.closeDatabase = async () => {
@@ -21,7 +29,7 @@ module.exports.closeDatabase = async () => {
       await mongoose.connection.dropDatabase();
       await mongoose.connection.close();
     }
-    if (mongoServer) await mongoServer.stop();
+    if (replSet) await replSet.stop();
   } catch (error) {
     console.error('Error closing database:', error);
   }
@@ -34,3 +42,4 @@ module.exports.clearDatabase = async () => {
     await collection.deleteMany({});
   }
 };
+

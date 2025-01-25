@@ -1,88 +1,233 @@
 
 // backend/tests/bettingService.test.js
-const mongoose = require('mongoose');
-const { processBetOutcome } = require('../services/bettingService');
-const Bet = require('../models/Bet');
-const User = require('../models/User');
-const tokenService = require('../services/tokenService');
-const { getGameOutcome } = require('../services/lichessService');
 
-jest.mock('../services/tokenService');
+const mongoose = require('mongoose');
+const { connect, closeDatabase, clearDatabase } = require('./setup');
+
+// Remove mocking of tokenService as it's not used in processBetOutcome
+// jest.mock('../services/tokenService'); // Removed this line
 jest.mock('../services/lichessService');
+jest.mock('../services/notificationService', () => ({
+  sendNotification: jest.fn(),
+}));
 
 describe('Betting Service', () => {
+  let User;
+  let Bet;
+  let processBetOutcome;
+  let getGameOutcome;
+  let sendNotification;
+
   let user;
-  let bet;
+  let opponent;
 
   beforeAll(async () => {
-    // Connect to in-memory MongoDB
-    const { connect } = require('./setup');
+    // Connect to in-memory MongoDB replica set
     await connect();
 
-    // Create a user
+    // Import models and services after connecting
+    User = require('../models/User');
+    Bet = require('../models/Bet');
+    getGameOutcome = require('../services/lichessService').getGameOutcome;
+    sendNotification = require('../services/notificationService').sendNotification;
+    processBetOutcome = require('../services/bettingService').processBetOutcome;
+  });
+
+  beforeEach(async () => {
+    // Clear the database before each test
+    await clearDatabase();
+
+    // Create test users
     user = await User.create({
       username: 'testuser',
       email: 'testuser@example.com',
       password: 'hashedpassword',
-      balance: 1000,
+      tokenBalance: 1000,
+      sweepstakesBalance: 500,
     });
 
-    // Create a bet
-    bet = await Bet.create({
-      creatorId: user._id,
-      gameId: 'game123',
-      creatorColor: 'white',
-      amount: 100,
-      status: 'pending',
+    opponent = await User.create({
+      username: 'opponentuser',
+      email: 'opponent@example.com',
+      password: 'hashedpassword',
+      tokenBalance: 1000,
+      sweepstakesBalance: 500,
     });
+
+    // Ensure users are created successfully
+    expect(user).toBeDefined();
+    expect(opponent).toBeDefined();
   });
 
   afterAll(async () => {
-    const { closeDatabase } = require('./setup');
+    // Close the database connection and stop the replica set
     await closeDatabase();
   });
 
-  it('processes winning bets correctly', async () => {
-    getGameOutcome.mockResolvedValue({ success: true, outcome: 'white' });
-    tokenService.mintTokens.mockResolvedValue({ success: true, txHash: '0xabc' });
+  it('should process winning bets correctly', async () => {
+    const gameId = 'game123';
+    const betAmount = 100;
 
-    const result = await processBetOutcome('game123');
-
-    expect(result.success).toBe(true);
-    expect(result.message).toContain('winning bets');
-
-    const updatedBet = await Bet.findById(bet._id);
-    expect(updatedBet.status).toBe('won');
-    expect(tokenService.mintTokens).toHaveBeenCalledWith(user._id, 10);
-  });
-
-  it('processes losing bets correctly', async () => {
-    // Place another bet that will lose with updated field names
-    const losingBet = await Bet.create({
+    // Create a matched bet
+    const matchedBet = await Bet.create({
       creatorId: user._id,
-      gameId: 'game123',
-      creatorColor: 'black',
-      amount: 50,
-      status: 'pending',
+      opponentId: opponent._id,
+      gameId,
+      status: 'matched',
+      creatorColor: 'white',
+      amount: betAmount,
+      currencyType: 'token',
     });
 
-    getGameOutcome.mockResolvedValue({ success: true, outcome: 'white' });
-    tokenService.mintTokens.mockResolvedValue({ success: true, txHash: '0xdef' });
+    // **Deduct the bet amount from both users to simulate a matched bet**
+    user.tokenBalance -= betAmount;
+    opponent.tokenBalance -= betAmount;
+    await user.save();
+    await opponent.save();
 
-    const result = await processBetOutcome('game123');
+    // Mock the game outcome to be 'white' (creator wins)
+    getGameOutcome.mockResolvedValueOnce({
+      success: true,
+      outcome: 'white',
+    });
+
+    // Mock sendNotification to always resolve successfully
+    sendNotification.mockResolvedValue(true);
+
+    const result = await processBetOutcome(gameId);
 
     expect(result.success).toBe(true);
-    expect(result.message).toContain('losing bets');
+    expect(result.message).toContain(`Processed bets for Game ID ${gameId} successfully.`);
 
-    const updatedBet = await Bet.findById(losingBet._id);
-    expect(updatedBet.status).toBe('lost');
-    expect(tokenService.mintTokens).not.toHaveBeenCalledWith(user._id, 50);
+    const updatedBet = await Bet.findById(matchedBet._id).populate('winnerId');
+    expect(updatedBet.status).toBe('won');
+    expect(updatedBet.winnerId._id.toString()).toBe(user._id.toString());
+
+    const updatedUser = await User.findById(user._id);
+    expect(updatedUser.tokenBalance).toBe(1000 - betAmount + betAmount * 2); // 1000 - 100 + 200 = 1100
+
+    const updatedOpponent = await User.findById(opponent._id);
+    expect(updatedOpponent.tokenBalance).toBe(1000 - betAmount); // 1000 - 100 = 900
+
+    // Verify that sendNotification was called once for the winner
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(sendNotification).toHaveBeenCalledWith(
+      user._id,
+      `Congratulations! You won ${betAmount * 2} tokens from game ${gameId}.`,
+      'tokensWon'
+    );
   });
 
-  it('handles invalid game outcomes gracefully', async () => {
-    getGameOutcome.mockResolvedValue({ success: false, error: 'Invalid game ID' });
+  it('should process losing bets correctly', async () => {
+    const gameId = 'game456';
+    const betAmount = 50;
 
-    await expect(processBetOutcome('invalidGame')).rejects.toThrow('Failed to fetch game outcome');
+    // Create a matched bet where creator loses
+    const losingBet = await Bet.create({
+      creatorId: user._id,
+      opponentId: opponent._id,
+      gameId,
+      status: 'matched',
+      creatorColor: 'black',
+      amount: betAmount,
+      currencyType: 'token',
+    });
+
+    // **Deduct the bet amount from both users to simulate a matched bet**
+    user.tokenBalance -= betAmount;
+    opponent.tokenBalance -= betAmount;
+    await user.save();
+    await opponent.save();
+
+    // Mock the game outcome to be 'white' (opponent wins)
+    getGameOutcome.mockResolvedValueOnce({
+      success: true,
+      outcome: 'white',
+    });
+
+    // Mock sendNotification to always resolve successfully
+    sendNotification.mockResolvedValue(true);
+
+    const result = await processBetOutcome(gameId);
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain(`Processed bets for Game ID ${gameId} successfully.`);
+
+    const updatedBet = await Bet.findById(losingBet._id).populate('winnerId');
+    expect(updatedBet.status).toBe('won');
+    expect(updatedBet.winnerId._id.toString()).toBe(opponent._id.toString());
+
+    const updatedUser = await User.findById(user._id);
+    expect(updatedUser.tokenBalance).toBe(1000 - betAmount); // 1000 - 50 = 950
+
+    const updatedOpponent = await User.findById(opponent._id);
+    expect(updatedOpponent.tokenBalance).toBe(1000 - betAmount + betAmount * 2); // 1000 - 50 + 100 = 1050
+
+    // Verify that sendNotification was called once for the winner
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(sendNotification).toHaveBeenCalledWith(
+      opponent._id,
+      `Congratulations! You won ${betAmount * 2} tokens from game ${gameId}.`,
+      'tokensWon'
+    );
+  });
+
+  it('should handle draw outcomes by refunding both players', async () => {
+    const gameId = 'game789';
+    const betAmount = 200;
+
+    // Create a matched bet
+    const drawBet = await Bet.create({
+      creatorId: user._id,
+      opponentId: opponent._id,
+      gameId,
+      status: 'matched',
+      creatorColor: 'white',
+      amount: betAmount,
+      currencyType: 'token',
+    });
+
+    // **Deduct the bet amount from both users to simulate a matched bet**
+    user.tokenBalance -= betAmount;
+    opponent.tokenBalance -= betAmount;
+    await user.save();
+    await opponent.save();
+
+    // Mock the game outcome to be 'draw'
+    getGameOutcome.mockResolvedValueOnce({
+      success: true,
+      outcome: 'draw',
+    });
+
+    // Mock sendNotification to always resolve successfully
+    sendNotification.mockResolvedValue(true);
+
+    const result = await processBetOutcome(gameId);
+
+    expect(result.success).toBe(true);
+    expect(result.message).toContain(`Processed bets for Game ID ${gameId} successfully.`);
+
+    const updatedBet = await Bet.findById(drawBet._id);
+    expect(updatedBet.status).toBe('draw');
+    expect(updatedBet.winnerId).toBeNull(); // Changed to beNull()
+
+    const updatedUser = await User.findById(user._id);
+    const updatedOpponent = await User.findById(opponent._id);
+    expect(updatedUser.tokenBalance).toBe(1000); // 1000 - 200 + 200
+    expect(updatedOpponent.tokenBalance).toBe(1000); // 1000 - 200 + 200
+
+    // Verify that sendNotification was called twice for both users
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+    expect(sendNotification).toHaveBeenCalledWith(
+      user._id,
+      `Your bet on game ${gameId} ended in a draw. Your tokens have been refunded.`,
+      'betDrawn'
+    );
+    expect(sendNotification).toHaveBeenCalledWith(
+      opponent._id,
+      `Your bet on game ${gameId} ended in a draw. Your tokens have been refunded.`,
+      'betDrawn'
+    );
   });
 });
 

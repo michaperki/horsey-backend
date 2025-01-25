@@ -1,4 +1,3 @@
-
 // backend/services/bettingService.js
 
 const { getGameOutcome } = require('./lichessService');
@@ -42,6 +41,10 @@ const processBetOutcome = async (gameId) => {
         // In case of a draw, refund both players
         const creator = bet.creatorId;
         const opponent = bet.opponentId;
+
+        if (!creator || !opponent) {
+          throw new Error('Creator or Opponent not found for the bet.');
+        }
 
         if (bet.currencyType === 'sweepstakes') {
           creator.sweepstakesBalance += bet.amount;

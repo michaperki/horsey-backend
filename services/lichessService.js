@@ -45,7 +45,8 @@ const fetchGameOutcomeFromLichess = async (gameId) => {
  * @param {string} timeControl - Format "minutes|increment" (e.g., "5|3")
  * @param {string} variant - Game variant (e.g., "standard", "crazyhouse")
  * @param {string} creatorAccessToken - OAuth access token for the creator
- * @param {string} opponentUsername - Lichess username of the opponent
+ * @param {string} opponentAccessToken - OAuth access token for the opponent
+ * @param {Function} getUsernameFromAccessToken - Function to retrieve username from access token
  * @returns {object} - { success: boolean, gameId: string, gameLink: string, error?: string }
  */
 const createLichessGame = async (timeControl, variant, creatorAccessToken, opponentAccessToken, getUsernameFromAccessToken) => {
@@ -169,3 +170,4 @@ const getUsernameFromAccessToken = async (accessToken) => {
 };
 
 module.exports = { createLichessGame, getGameOutcome, getUsernameFromAccessToken };
+
