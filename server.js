@@ -19,6 +19,7 @@ const leaderboardRoutes = require('./routes/leaderboard');
 const testEmailRoutes = require('./routes/testEmail');
 const resetDatabaseRoutes = require('./routes/resetDatabase');
 const testUtilsRoutes = require('./routes/testUtils');
+const notificationRoutes = require('./routes/notification');
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use('/tokens', tokenRoutes);
 app.use('/bets', betRoutes);
 app.use('/email', testEmailRoutes);
 app.use('/leaderboard', leaderboardRoutes);
+app.use('/notifications', notificationRoutes);
 
 // Test-only routes
 if (process.env.NODE_ENV === 'cypress') {

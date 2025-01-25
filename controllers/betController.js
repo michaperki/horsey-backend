@@ -348,23 +348,35 @@ const acceptBet = async (req, res) => {
 
         // Fetch the user details for assigned colors
         const [whiteUser, blackUser] = await Promise.all([
-            User.findById(finalWhiteId),
-            User.findById(finalBlackId),
+          User.findById(finalWhiteId).select('+lichessAccessToken username _id'),
+          User.findById(finalBlackId).select('+lichessAccessToken username _id'),
         ]);
+
 
         // Check if both users have connected their Lichess accounts
         if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
+            // Log detailed debug information
+            console.error(`Lichess OAuth tokens missing for users:`);
+            if (!whiteUser.lichessAccessToken) {
+                console.error(`White user missing token: ID=${whiteUser._id}, username=${whiteUser.username}`);
+            }
+            if (!blackUser.lichessAccessToken) {
+                console.error(`Black user missing token: ID=${blackUser._id}, username=${blackUser.username}`);
+            }
+
             // Roll back if tokens are missing
             if (bet.currencyType === 'sweepstakes') {
-              opponent.sweepstakesBalance += bet.amount;
+                opponent.sweepstakesBalance += bet.amount;
             } else {
-              opponent.tokenBalance += bet.amount;
+                opponent.tokenBalance += bet.amount;
             }
             await opponent.save();
             bet.status = 'pending';
             bet.opponentId = null;
             await bet.save();
-            return res.status(400).json({ error: 'Both users must connect their Lichess accounts (OAuth token missing).' });
+            return res.status(400).json({ 
+                error: 'Both users must connect their Lichess accounts (OAuth token missing).' 
+            });
         }
 
         // Create the Lichess game using the Lichess Service
