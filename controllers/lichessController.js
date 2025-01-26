@@ -43,32 +43,22 @@ const generateCodeChallenge = (codeVerifier) => {
 const initiateLichessOAuth = (req, res) => {
   const { LICHESS_CLIENT_ID, LICHESS_REDIRECT_URI, LICHESS_SCOPES } = process.env;
 
-  // Logging for debugging (remove or limit in production)
-  console.log('Initiating Lichess OAuth for User ID:', req.user.id);
-
   if (!LICHESS_CLIENT_ID || !LICHESS_REDIRECT_URI) {
     console.error('Lichess OAuth configuration is missing.');
     return res.status(500).json({ error: 'Lichess OAuth configuration is missing.' });
   }
 
-  // Generate a random state parameter for CSRF protection
   const state = generateRandomState();
-
-  // Generate code_verifier and code_challenge for PKCE
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
-  // Store state and codeVerifier associated with the userId
   oauthStore.set(state, {
     userId: req.user.id,
     codeVerifier,
     createdAt: Date.now(),
   });
 
-  // Define the scope; adjust as necessary
   const scope = LICHESS_SCOPES || 'openid email offline_access';
-
-  // Construct the authorization URL
   const authorizationUrl = `https://lichess.org/oauth/authorize?${qs.stringify({
     response_type: 'code',
     client_id: LICHESS_CLIENT_ID,
@@ -79,12 +69,8 @@ const initiateLichessOAuth = (req, res) => {
     code_challenge_method: 'S256',
   })}`;
 
-  // Logging for debugging (avoid logging sensitive information)
-  console.log('Generated state:', state);
-  console.log('Authorization URL:', authorizationUrl);
-
-  // Redirect the user to Lichess OAuth authorization page
-  res.redirect(authorizationUrl);
+  // Send the authorization URL as JSON
+  res.status(200).json({ redirectUrl: authorizationUrl });
 };
 
 /**
@@ -146,20 +132,21 @@ const mapPerfsToRatings = (perfs) => {
  * Handles the OAuth callback from Lichess, exchanges the code for tokens, and stores user data.
  */
 const handleLichessCallback = async (req, res) => {
+  console.log(req.query);
   const { code, state } = req.query;
 
   console.log('Received OAuth callback with code:', code, 'and state:', state);
 
   if (!code || !state) {
     console.error('Missing code or state parameter.');
-    return res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=error&message=${encodeURIComponent('Missing code or state parameter')}`);
+    return res.redirect(`${process.env.FRONTEND_URL}/home?lichess=error&message=${encodeURIComponent('Missing code or state parameter')}`);
   }
 
   const oauthData = oauthStore.get(state);
 
   if (!oauthData) {
     console.error('Invalid or expired state parameter.');
-    return res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=error&message=${encodeURIComponent('Invalid or expired state parameter')}`);
+    return res.redirect(`${process.env.FRONTEND_URL}/home?lichess=error&message=${encodeURIComponent('Invalid or expired state parameter')}`);
   }
 
   const { userId, codeVerifier, createdAt } = oauthData;
@@ -168,7 +155,7 @@ const handleLichessCallback = async (req, res) => {
   if (Date.now() - createdAt > STATE_EXPIRATION_TIME) {
     oauthStore.delete(state);
     console.error('State parameter has expired.');
-    return res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=error&message=${encodeURIComponent('State parameter has expired')}`);
+    return res.redirect(`${process.env.FRONTEND_URL}/home?lichess=error&message=${encodeURIComponent('State parameter has expired')}`);
   }
 
   try {
@@ -231,7 +218,7 @@ const handleLichessCallback = async (req, res) => {
     console.log(`User ${userId} connected Lichess account: ${username}`);
 
     // Redirect back to frontend with success query parameter
-    res.redirect(`${process.env.FRONTEND_URL}/dashboard?lichess=connected`);
+    res.redirect(`${process.env.FRONTEND_URL}/profile?lichess=connected`);
   } catch (error) {
     // Clear the OAuth data from the store in case of error
     oauthStore.delete(state);
