@@ -43,6 +43,10 @@ const generateCodeChallenge = (codeVerifier) => {
 const initiateLichessOAuth = (req, res) => {
   const { LICHESS_CLIENT_ID, LICHESS_REDIRECT_URI, LICHESS_SCOPES } = process.env;
 
+  // Log the client ID and redirect URI
+  console.log('LICHESS_CLIENT_ID:', LICHESS_CLIENT_ID);
+  console.log('LICHESS_REDIRECT_URI:', LICHESS_REDIRECT_URI);
+
   if (!LICHESS_CLIENT_ID || !LICHESS_REDIRECT_URI) {
     console.error('Lichess OAuth configuration is missing.');
     return res.status(500).json({ error: 'Lichess OAuth configuration is missing.' });
