@@ -62,7 +62,7 @@ const initiateLichessOAuth = (req, res) => {
     createdAt: Date.now(),
   });
 
-  const scope = LICHESS_SCOPES || 'openid email offline_access';
+  const scope = LICHESS_SCOPES || 'challenge:read challenge:write';
   const authorizationUrl = `https://lichess.org/oauth/authorize?${qs.stringify({
     response_type: 'code',
     client_id: LICHESS_CLIENT_ID,
