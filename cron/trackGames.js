@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const Bet = require('../models/Bet');
 const { getGameOutcome } = require('../services/lichessService');
 const { sendEmail } = require('../services/emailService');
+const { sendNotification } = require('../services/notificationService');
 const User = require('../models/User');
 
 /**
@@ -84,6 +85,12 @@ function startTrackingGames() {
           winnerUser.email,
           'Bet Won!',
           `Congrats ${winnerUser.username}! You won ${pot} PTK on game ${gameId}.`
+        );
+
+        await sendNotification(
+          winnerUser._id,
+          `Congrats! You won ${pot} tokens on game ${bet.gameId}.`,
+          'tokensWon'
         );
 
         console.log(`User ${winnerUser.username} won ${pot} PTK on game ${gameId}.`);
