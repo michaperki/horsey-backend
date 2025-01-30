@@ -59,6 +59,7 @@ jobs:
           LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          WEB3_PROVIDER_URL: ${{ secrets.WEB3_PROVIDER_URL }}
         run: npm install
 
       - name: Run Linter
@@ -89,6 +90,7 @@ jobs:
           LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          WEB3_PROVIDER_URL: ${{ secrets.WEB3_PROVIDER_URL }}
         run: npm test
 
       - name: Upload Coverage Report
