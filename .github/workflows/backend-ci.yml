@@ -19,6 +19,8 @@ jobs:
         ports:
           - 27017:27017
         options: >-
+          --replSet testset
+          --bind_ip_all
           --health-cmd="mongo --eval 'db.runCommand({ ping: 1 })'"
           --health-interval=10s
           --health-timeout=5s
@@ -67,6 +69,24 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: npm install
+
+      - name: Initialize MongoDB Replica Set
+        run: |
+          # Wait for MongoDB to start
+          sleep 15
+          # Initialize the replica set
+          mongo --host localhost --port 27017 --eval 'rs.initiate({
+            _id: "testset",
+            members: [{ _id: 0, host: "localhost:27017" }]
+          })'
+
+      - name: Wait for Replica Set to be Ready
+        run: |
+          for i in {1..10}; do
+            mongo --host localhost --port 27017 --eval "rs.status()" && break
+            echo "Waiting for replica set to initialize..."
+            sleep 5
+          done
 
       - name: Run Linter
         run: npm run lint
