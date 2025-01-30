@@ -111,9 +111,7 @@ jobs:
       # 9. (Optional) Add a step to display test coverage summary
       - name: Display Coverage Summary
         if: success() # Only run if previous steps were successful
-        run: |
-          echo "Coverage Summary:"
-          npx coverage-summary-cli --path coverage/lcov.info
+        run: npx nyc report --reporter=text-summary
 
       # 10. (Optional) Notify on failure or success
       # You can integrate notifications (e.g., Slack, Email) based on your preference
