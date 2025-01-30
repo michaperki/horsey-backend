@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { getUserData } = require('../controllers/userController');
+const { getUserData, getUserBalances } = require('../controllers/userController');
 
 /**
  * @route   GET /user/data
@@ -13,4 +13,12 @@ const { getUserData } = require('../controllers/userController');
  */
 router.get('/data', authenticateToken, getUserData);
 
+/**
+ * @route   GET /user/balances
+ * @desc    Get authenticated user's token and sweepstakes balances
+ * @access  Protected
+ */
+router.get('/balances', authenticateToken, getUserBalances);
+
 module.exports = router;
+

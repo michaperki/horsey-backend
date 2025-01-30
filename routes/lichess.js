@@ -6,7 +6,7 @@ const { authenticateToken, authorizeRole } = require('../middleware/authMiddlewa
 const {
   initiateLichessOAuth,
   handleLichessCallback,
-  validateResultHandler,
+  // validateResultHandler,
   getLichessStatus,
   getLichessUser,
   disconnectLichessAccountHandler
@@ -33,7 +33,7 @@ router.get('/status', authenticateToken, getLichessStatus);
 router.get('/user', authenticateToken, getLichessUser);
 
 // Define the POST route with the handler
-router.post('/validate-result', authenticateToken, authorizeRole('admin'), validateResultHandler);
+// router.post('/validate-result', authenticateToken, authorizeRole('admin'), validateResultHandler);
 
 // Disconnect Lichess Account
 router.post('/disconnect', authenticateToken, disconnectLichessAccountHandler);

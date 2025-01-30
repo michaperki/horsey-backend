@@ -2,7 +2,6 @@
 // backend/tests/betRoutes.test.js
 
 jest.mock('../services/lichessService'); // Mock lichessService
-jest.mock('../services/tokenService'); // Mock tokenService
 
 const { getGameOutcome, createLichessGame, getUsernameFromAccessToken } = require('../services/lichessService');
 const request = require('supertest');
