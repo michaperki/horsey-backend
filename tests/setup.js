@@ -1,5 +1,5 @@
-
 // backend/tests/setup.js
+
 const mongoose = require('mongoose');
 const { MongoMemoryReplSet } = require('mongodb-memory-server');
 
@@ -11,7 +11,16 @@ module.exports.connect = async () => {
   }
 
   replSet = await MongoMemoryReplSet.create({
-    replSet: { count: 1 }, // Single node replica set
+    replSet: {
+      count: 1, // Single node replica set
+      storageEngine: 'wiredTiger', // Ensure using WiredTiger
+      // Additional configurations can be added here
+    },
+    // Optional: Specify MongoDB version if necessary
+    // For example, use a stable version that supports transactions well
+    // binary: {
+    //   version: '6.0.0' // Replace with desired version
+    // }
   });
 
   const uri = replSet.getUri();

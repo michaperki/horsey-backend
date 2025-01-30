@@ -1,37 +1,27 @@
-
 // backend/tests/bettingService.test.js
 
 const mongoose = require('mongoose');
-const { connect, closeDatabase, clearDatabase } = require('./setup');
+const { clearDatabase } = require('./setup');
 
 // Remove mocking of tokenService as it's not used in processBetOutcome
 // jest.mock('../services/tokenService'); // Removed this line
+
+// Mock external services
 jest.mock('../services/lichessService');
 jest.mock('../services/notificationService', () => ({
   sendNotification: jest.fn(),
 }));
 
-describe('Betting Service', () => {
-  let User;
-  let Bet;
-  let processBetOutcome;
-  let getGameOutcome;
-  let sendNotification;
+// Import models and services after the global connection is established
+const User = require('../models/User');
+const Bet = require('../models/Bet');
+const { getGameOutcome } = require('../services/lichessService');
+const { sendNotification } = require('../services/notificationService');
+const { processBetOutcome } = require('../services/bettingService');
 
+describe('Betting Service', () => {
   let user;
   let opponent;
-
-  beforeAll(async () => {
-    // Connect to in-memory MongoDB replica set
-    await connect();
-
-    // Import models and services after connecting
-    User = require('../models/User');
-    Bet = require('../models/Bet');
-    getGameOutcome = require('../services/lichessService').getGameOutcome;
-    sendNotification = require('../services/notificationService').sendNotification;
-    processBetOutcome = require('../services/bettingService').processBetOutcome;
-  });
 
   beforeEach(async () => {
     // Clear the database before each test
@@ -59,9 +49,9 @@ describe('Betting Service', () => {
     expect(opponent).toBeDefined();
   });
 
-  afterAll(async () => {
-    // Close the database connection and stop the replica set
-    await closeDatabase();
+  afterEach(() => {
+    // Reset all mocks after each test
+    jest.clearAllMocks();
   });
 
   it('should process winning bets correctly', async () => {
@@ -230,4 +220,3 @@ describe('Betting Service', () => {
     );
   });
 });
-
