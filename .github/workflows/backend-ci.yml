@@ -19,12 +19,39 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --replSet testset
+          --replSet rs0
           --bind_ip_all
-          --health-cmd="mongo --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+        # Initialize the replica set
+        # This command runs after the MongoDB container starts
+        # It sets up a single-node replica set which is sufficient for testing
+        # You might need to adjust the timeout based on your needs
+        command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    
+    env:
+      PORT: ${{ secrets.PORT }}
+      OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+      OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+      OAUTH_CALLBACK_URL: ${{ secrets.OAUTH_CALLBACK_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+      PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      PROMO_TOKEN_ADDRESS: ${{ secrets.PROMO_TOKEN_ADDRESS }}
+      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      MONGODB_URI: mongodb://localhost:27017/testdb?replicaSet=rs0
+      GOOGLE_CLIENT_ID_ADMIN: ${{ secrets.GOOGLE_CLIENT_ID_ADMIN }}
+      GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      NODE_ENV: ${{ secrets.NODE_ENV }}
+      MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
+      LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
+      LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
+      LICHESS_REDIRECT_URI: ${{ secrets.LICHESS_REDIRECT_URI }}
+      LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
+      SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
 
     steps:
       - name: Checkout Code
@@ -35,6 +62,16 @@ jobs:
         with:
           node-version: 18
 
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install libssl1.1
         run: |
           sudo apt-get update
@@ -43,82 +80,31 @@ jobs:
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb || sudo apt-get install -f -y
 
       - name: Install Dependencies
-        env:
-          PORT: ${{ secrets.PORT }}
-          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
-          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
-          OAUTH_CALLBACK_URL: ${{ secrets.OAUTH_CALLBACK_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PROMO_TOKEN_ADDRESS: ${{ secrets.PROMO_TOKEN_ADDRESS }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          GOOGLE_CLIENT_ID_ADMIN: ${{ secrets.GOOGLE_CLIENT_ID_ADMIN }}
-          GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          NODE_ENV: ${{ secrets.NODE_ENV }}
-          MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
-          LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
-          LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
-          LICHESS_REDIRECT_URI: ${{ secrets.LICHESS_REDIRECT_URI }}
-          LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-        run: npm install
+        run: npm ci
+        # Using npm ci for faster, more reliable installs in CI environments
 
-      - name: Initialize MongoDB Replica Set
+      - name: Wait for MongoDB to be Ready
         run: |
-          # Wait for MongoDB to start
-          sleep 15
-          # Initialize the replica set
-          mongo --host localhost --port 27017 --eval 'rs.initiate({
-            _id: "testset",
-            members: [{ _id: 0, host: "localhost:27017" }]
-          })'
-
-      - name: Wait for Replica Set to be Ready
-        run: |
-          for i in {1..10}; do
-            mongo --host localhost --port 27017 --eval "rs.status()" && break
-            echo "Waiting for replica set to initialize..."
-            sleep 5
+          for i in {1..30}; do
+            mongo --host localhost --port 27017 --eval "rs.initiate()" && break
+            echo "Waiting for MongoDB to initialize replica set..."
+            sleep 2
           done
+        # This step initializes the replica set and waits until it's ready
+        # Adjust the number of attempts and sleep duration as needed
+
+      - name: Verify MongoDB Replica Set Status
+        run: |
+          mongo --host localhost --port 27017 --eval "rs.status()"
 
       - name: Run Linter
         run: npm run lint
 
       - name: Run Tests
-        env:
-          PORT: ${{ secrets.PORT }}
-          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
-          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
-          OAUTH_CALLBACK_URL: ${{ secrets.OAUTH_CALLBACK_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PROMO_TOKEN_ADDRESS: ${{ secrets.PROMO_TOKEN_ADDRESS }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          GOOGLE_CLIENT_ID_ADMIN: ${{ secrets.GOOGLE_CLIENT_ID_ADMIN }}
-          GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
-          LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
-          LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
-          LICHESS_REDIRECT_URI: ${{ secrets.LICHESS_REDIRECT_URI }}
-          LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: npm test
 
       - name: Upload Coverage Report
+        if: success()
         uses: actions/upload-artifact@v3
         with:
           name: coverage-report
@@ -126,4 +112,29 @@ jobs:
 
       - name: Check Formatting
         run: npm run format -- --check
+
+      - name: Notify on Failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueTitle = "CI Build Failed 🚨";
+            const issueBody = "The latest CI build has failed. Please check the logs for more details.";
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'ci-failure'
+            });
+            if (issues.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['ci-failure']
+              });
+            }
+            // Optionally, you can add more sophisticated notification mechanisms
+
 
