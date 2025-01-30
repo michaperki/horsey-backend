@@ -3,83 +3,118 @@ name: Backend CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      mongodb:
-        image: mongo:5.0
-        # Start MongoDB in replica set mode. Bind to 0.0.0.0 to allow connections from the runner.
-        command: [ "mongod", "--replSet", "rs0", "--bind_ip", "0.0.0.0,mongodb" ]
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd="mongo --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
+      # 1. Checkout the repository
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      # 2. Set up Node.js environment with caching
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
+          cache: 'npm'
 
-      - name: Wait for MongoDB
+      # 3. Install system dependencies (retain only if necessary)
+      - name: Install libssl1.1
         run: |
-          # Wait up to ~60s total for Mongo to become available
-          for i in {1..30}; do
-            if mongo --eval "db.runCommand({ ping: 1 })" &>/dev/null; then
-              echo "MongoDB is up!"
-              break
-            fi
-            echo "Waiting for MongoDB to start..."
-            sleep 2
-          done
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb || sudo apt-get install -f -y
+        # Uncomment the above step only if your project explicitly requires libssl1.1
+        # Otherwise, consider removing it to speed up the workflow
 
-      - name: Initialize Replica Set
-        run: |
-          mongo --eval "rs.initiate()"
-          # Give the replica set time to finish initialization
-          sleep 5
-          mongo --eval "rs.status()"
-
+      # 4. Install project dependencies
       - name: Install Dependencies
         env:
-          # You can add or remove any secrets you need for installation here
-          NODE_ENV: test
+          PORT: ${{ secrets.PORT }}
+          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          OAUTH_CALLBACK_URL: ${{ secrets.OAUTH_CALLBACK_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PROMO_TOKEN_ADDRESS: ${{ secrets.PROMO_TOKEN_ADDRESS }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          GOOGLE_CLIENT_ID_ADMIN: ${{ secrets.GOOGLE_CLIENT_ID_ADMIN }}
+          GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+          MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
+          LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
+          LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
+          LICHESS_REDIRECT_URI: ${{ secrets.LICHESS_REDIRECT_URI }}
+          LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: npm install
 
+      # 5. Run linter to ensure code quality
       - name: Run Linter
         run: npm run lint
 
+      # 6. Execute the test suite
       - name: Run Tests
         env:
-          # Override MONGODB_URI to point to our local replica set
-          # Adjust "test" to your preferred DB name if necessary
-          MONGODB_URI: "mongodb://127.0.0.1:27017/test?replicaSet=rs0"
-
-          # Include any other secrets that your tests rely on:
+          PORT: ${{ secrets.PORT }}
+          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          OAUTH_CALLBACK_URL: ${{ secrets.OAUTH_CALLBACK_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PROMO_TOKEN_ADDRESS: ${{ secrets.PROMO_TOKEN_ADDRESS }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          GOOGLE_CLIENT_ID_ADMIN: ${{ secrets.GOOGLE_CLIENT_ID_ADMIN }}
+          GOOGLE_CLIENT_SECRET_ADMIN: ${{ secrets.GOOGLE_CLIENT_SECRET_ADMIN }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          MOCK_LICHESS: ${{ secrets.MOCK_LICHESS }}
+          LICHESS_CLIENT_ID: ${{ secrets.LICHESS_CLIENT_ID }}
+          LICHESS_CLIENT_SECRET: ${{ secrets.LICHESS_CLIENT_SECRET }}
+          LICHESS_REDIRECT_URI: ${{ secrets.LICHESS_REDIRECT_URI }}
+          LICHESS_SCOPES: ${{ secrets.LICHESS_SCOPES }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          # ...
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
         run: npm test
 
+      # 7. Upload coverage report for analysis
       - name: Upload Coverage Report
+        if: always() # Ensure coverage is uploaded even if tests fail
         uses: actions/upload-artifact@v3
         with:
           name: coverage-report
           path: coverage/
 
-      # (Optional) Check formatting
+      # 8. Check code formatting to maintain consistency
       - name: Check Formatting
         run: npm run format -- --check
+
+      # 9. (Optional) Add a step to display test coverage summary
+      - name: Display Coverage Summary
+        if: success() # Only run if previous steps were successful
+        run: |
+          echo "Coverage Summary:"
+          npx coverage-summary-cli --path coverage/lcov.info
+
+      # 10. (Optional) Notify on failure or success
+      # You can integrate notifications (e.g., Slack, Email) based on your preference
 
