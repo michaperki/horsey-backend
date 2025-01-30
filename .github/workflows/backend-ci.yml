@@ -108,9 +108,12 @@ jobs:
       - name: Check Formatting
         run: npm run format -- --check
 
-      # 9. (Optional) Add a step to display test coverage summary
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      # 9. Display Coverage Summary without rerunning tests
       - name: Display Coverage Summary
         if: success() # Only run if previous steps were successful
         run: |
           echo "Coverage Summary:"
-          npx jest --coverage --coverageReporters=text-summary
+          cat coverage/coverage-summary.json | jq
