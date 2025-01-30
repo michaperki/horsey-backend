@@ -27,6 +27,7 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5000',
+  'http://localhost:5000/',
   'https://horsey-chess.netlify.app',
   'https://horsey-dd32bf69ae0e.herokuapp.com'
 ];

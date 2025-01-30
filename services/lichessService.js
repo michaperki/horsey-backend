@@ -3,7 +3,7 @@
 
 const axios = require('axios');
 const qs = require('qs');
-const { mockedGameOutcome } = require('../fixtures/lichessMockData');
+const { mockedGameOutcome, mockedCreateGameResponse } = require('../fixtures/lichessMockData');
 
 /**
  * Returns a mocked Lichess game outcome.
@@ -50,6 +50,12 @@ const fetchGameOutcomeFromLichess = async (gameId) => {
  * @returns {object} - { success: boolean, gameId: string, gameLink: string, error?: string }
  */
 const createLichessGame = async (timeControl, variant, creatorAccessToken, opponentAccessToken, getUsernameFromAccessToken) => {
+    if (process.env.MOCK_LICHESS === 'true') {
+        console.log('MOCK_LICHESS is enabled. Returning mocked game creation response.');
+        const userId = await getUsernameFromAccessToken(creatorAccessToken);
+        return mockedCreateGameResponse(userId);
+    }
+
     try {
         console.log('Starting to create Lichess game...');
         console.log('Time Control:', timeControl);
@@ -112,11 +118,16 @@ const createLichessGame = async (timeControl, variant, creatorAccessToken, oppon
 };
 
 /**
- * Fetches the outcome of a game from Lichess API.
+ * Fetches the outcome of a game from Lichess API or returns a mocked outcome.
  * @param {string} gameId - The ID of the game.
  * @returns {object} - { success: boolean, outcome: 'white' | 'black' | 'draw', error?: string }
  */
 const getGameOutcome = async (gameId) => {
+    if (process.env.MOCK_LICHESS === 'true') {
+        console.log('MOCK_LICHESS is enabled. Returning mocked game outcome.');
+        return getMockedGameOutcome();
+    }
+
     try {
         const url = `https://lichess.org/game/export/${gameId}?pgnInJson=true`;
         const response = await axios.get(url, {
@@ -156,6 +167,12 @@ const getGameOutcome = async (gameId) => {
  * @returns {string|null} - Username or null if failed.
  */
 const getUsernameFromAccessToken = async (accessToken) => {
+    if (process.env.MOCK_LICHESS === 'true') {
+        console.log('MOCK_LICHESS is enabled. Returning mocked username.');
+        // Return a mock username based on access token (you can customize this logic)
+        return `mockUser_${accessToken.substring(0, 5)}`;
+    }
+
     try {
         const response = await axios.get('https://lichess.org/api/account', {
             headers: {
