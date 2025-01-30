@@ -123,43 +123,67 @@ const createLichessGame = async (timeControl, variant, creatorAccessToken, oppon
  * @returns {object} - { success: boolean, outcome: 'white' | 'black' | 'draw', error?: string }
  */
 const getGameOutcome = async (gameId) => {
-    if (process.env.MOCK_LICHESS === 'true') {
-        console.log('MOCK_LICHESS is enabled. Returning mocked game outcome.');
-        return getMockedGameOutcome();
+  console.debug(`Starting getGameOutcome for Game ID: ${gameId}`);
+
+  if (process.env.MOCK_LICHESS === 'true') {
+    console.log('MOCK_LICHESS is enabled. Returning mocked game outcome.');
+    return getMockedGameOutcome();
+  }
+
+  try {
+    const url = `https://lichess.org/game/export/${gameId}?pgnInJson=true`;
+    console.debug(`Fetching data from Lichess API with URL: ${url}`);
+
+    const response = await axios.get(url, {
+      headers: {
+        'Accept': 'application/json',
+        // 'Authorization': `Bearer YOUR_ACCESS_TOKEN`, // Not required for public games
+      },
+    });
+
+    console.debug('Received response from Lichess API:', response.status, response.statusText);
+
+    const gameData = response.data;
+    console.debug('Game data received:', gameData);
+
+    if (!gameData || !gameData.players) {
+      console.warn('Invalid game data structure:', gameData);
+      throw new Error('Invalid game data received from Lichess.');
     }
 
-    try {
-        const url = `https://lichess.org/game/export/${gameId}?pgnInJson=true`;
-        const response = await axios.get(url, {
-            headers: {
-                'Accept': 'application/json',
-                // 'Authorization': `Bearer YOUR_ACCESS_TOKEN`, // Not required for public games
-            },
-        });
+    const { winner, status } = gameData;
+    console.debug(`Game status: ${status}, Winner: ${winner}`);
 
-        const gameData = response.data;
-
-        if (!gameData || !gameData.players) {
-            throw new Error('Invalid game data received from Lichess.');
-        }
-
-        const { winner, status } = gameData;
-
-        if (status === 'draw') {
-            return { success: true, outcome: 'draw' };
-        } else if (winner === 'white') {
-            return { success: true, outcome: 'white' };
-        } else if (winner === 'black') {
-            return { success: true, outcome: 'black' };
-        } else {
-            // Game is still ongoing or an unexpected status
-            return { success: false, error: 'Game is still ongoing or has an unexpected status.' };
-        }
-    } catch (error) {
-        console.error(`Error fetching game outcome for Game ID ${gameId}:`, error.message);
-        return { success: false, error: error.message };
+    let outcome;
+    if (status === 'draw') {
+      outcome = 'draw';
+    } else if (winner === 'white') {
+      outcome = 'white';
+    } else if (winner === 'black') {
+      outcome = 'black';
+    } else {
+      console.warn('Unexpected game status or ongoing game:', status);
+      return { success: false, error: 'Game is still ongoing or has an unexpected status.' };
     }
+
+    const whiteUsername = gameData.players.white.user.name;
+    const blackUsername = gameData.players.black.user.name;
+
+    console.debug('Game outcome determined:', { outcome, whiteUsername, blackUsername });
+
+    return {
+      success: true,
+      outcome,
+      whiteUsername,
+      blackUsername,
+    };
+  } catch (error) {
+    console.error(`Error fetching game outcome for Game ID ${gameId}:`, error.message);
+    console.debug('Stack trace:', error.stack);
+    return { success: false, error: error.message };
+  }
 };
+
 
 /**
  * Retrieves the username associated with a Lichess access token.
@@ -187,4 +211,5 @@ const getUsernameFromAccessToken = async (accessToken) => {
 };
 
 module.exports = { createLichessGame, getGameOutcome, getUsernameFromAccessToken };
+
 

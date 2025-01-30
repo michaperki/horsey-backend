@@ -11,6 +11,7 @@ const { getIO } = require('../socket');
  * @param {String} type - Type of notification
  */
 const sendNotification = async (userId, message, type) => {
+  console.log("sending notification");
   try {
     // Create a new notification in the database
     const notification = await Notification.create({
@@ -22,7 +23,7 @@ const sendNotification = async (userId, message, type) => {
     // Emit the notification via Socket.io to the specific user room
     const io = getIO();
     io.to(userId.toString()).emit('notification', {
-      id: notification._id,
+      _id: notification._id,
       message: notification.message,
       read: notification.read,
       type: notification.type,

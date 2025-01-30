@@ -22,8 +22,8 @@ function startTrackingGames() {
         status: 'matched',
         gameId: { $ne: null }
       })
-      .populate('finalWhiteId')
-      .populate('finalBlackId');
+      .populate('creatorId') // Populate creatorId to access lichessUsername
+      .populate('opponentId'); // Populate opponentId to access lichessUsername
 
       console.log(`Found ${matchedBets.length} matched bets to process.`);
 
@@ -38,15 +38,28 @@ function startTrackingGames() {
           continue;
         }
 
-        const { outcome } = gameResult; // 'white', 'black', or 'draw'
+        const { outcome, whiteUsername, blackUsername } = gameResult;
+
+        // Map Lichess usernames to your user accounts
+        const whiteUser = await User.findOne({ lichessUsername: whiteUsername });
+        const blackUser = await User.findOne({ lichessUsername: blackUsername });
+
+        if (!whiteUser || !blackUser) {
+          console.error(`Could not find user accounts for game ID ${gameId}. White: ${whiteUsername}, Black: ${blackUsername}`);
+          continue;
+        }
+
+        // Assign finalWhiteId and finalBlackId
+        bet.finalWhiteId = whiteUser._id;
+        bet.finalBlackId = blackUser._id;
 
         if (outcome === 'draw') {
           // Handle draw
           bet.status = 'draw';
+          bet.winnerId = null;
           await bet.save();
 
-          const whiteUser = bet.finalWhiteId;
-          const blackUser = bet.finalBlackId;
+          // Refund both players
           whiteUser.balance += bet.amount;
           blackUser.balance += bet.amount;
           await whiteUser.save();
@@ -59,9 +72,9 @@ function startTrackingGames() {
         // Identify Winner
         let winnerUser;
         if (outcome === 'white') {
-          winnerUser = bet.finalWhiteId;
+          winnerUser = whiteUser;
         } else if (outcome === 'black') {
-          winnerUser = bet.finalBlackId;
+          winnerUser = blackUser;
         }
 
         if (!winnerUser) {
@@ -72,8 +85,9 @@ function startTrackingGames() {
         // Calculate pot
         const pot = bet.amount * 2;
 
-        // Update bet status
+        // Update bet status and winnerId
         bet.status = 'won';
+        bet.winnerId = winnerUser._id;
         await bet.save();
 
         // Update winner's off-chain balance
