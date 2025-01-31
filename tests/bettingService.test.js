@@ -87,7 +87,7 @@ describe('Betting Service', () => {
     const result = await processBetOutcome(gameId);
 
     expect(result.success).toBe(true);
-    expect(result.message).toContain(`Processed bets for Game ID ${gameId} successfully.`);
+    expect(result.message).toContain(`Processed bets for Game ID ${gameId}.`);
 
     const updatedBet = await Bet.findById(matchedBet._id).populate('winnerId');
     expect(updatedBet.status).toBe('won');
@@ -141,7 +141,7 @@ describe('Betting Service', () => {
     const result = await processBetOutcome(gameId);
 
     expect(result.success).toBe(true);
-    expect(result.message).toContain(`Processed bets for Game ID ${gameId} successfully.`);
+    expect(result.message).toContain(`Processed bets for Game ID ${gameId}.`);
 
     const updatedBet = await Bet.findById(losingBet._id).populate('winnerId');
     expect(updatedBet.status).toBe('won');
@@ -195,7 +195,7 @@ describe('Betting Service', () => {
     const result = await processBetOutcome(gameId);
 
     expect(result.success).toBe(true);
-    expect(result.message).toContain(`Processed bets for Game ID ${gameId} successfully.`);
+    expect(result.message).toContain(`Processed bets for Game ID ${gameId}.`);
 
     const updatedBet = await Bet.findById(drawBet._id);
     expect(updatedBet.status).toBe('draw');
