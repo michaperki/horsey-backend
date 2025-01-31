@@ -98,6 +98,7 @@ async function refundBalance(user, amount, balanceKey, gameId, session) {
 
 async function handleWin(bet, winner, session) {
   const pot = bet.amount * 2;
+  bet.winnings = pot;  // Set the winnings
   const balanceKey = bet.currencyType === 'sweepstakes' ? 'sweepstakesBalance' : 'tokenBalance';
 
   const oldBalance = winner[balanceKey];

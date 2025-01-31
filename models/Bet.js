@@ -76,6 +76,10 @@ const BetSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    winnings: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

@@ -1,39 +1,95 @@
 
 // backend/controllers/userController.js
-
 const User = require('../models/User');
-const Bet = require('../models/Bet'); // Assuming Bet model holds game data
+const Bet = require('../models/Bet');
 
 /**
  * Get the authenticated user's profile along with updated statistics.
  */
 const getUserProfile = async (req, res) => {
   try {
-    const userId = req.user.id; // Ensure authenticateToken middleware sets req.user
+    const userId = req.user.id; // assumed to be a string
+    console.log(`Fetching profile for userId: ${userId}`);
+
     const user = await User.findById(userId).select('-password +lichessAccessToken');
+    console.log('User fetched from DB:', user ? user.username : 'Not found');
 
     if (!user) {
+      console.log('User not found.');
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Aggregate user statistics
-    const totalGames = await Bet.countDocuments({
-      $or: [{ creatorId: userId }, { opponentId: userId }],
-      status: { $in: ['won', 'lost', 'draw'] }, // Only completed games
-    });
+    const currencyType = req.query.currencyType || 'token';
 
-    const wins = await Bet.countDocuments({ creatorId: userId, status: 'won' }) +
-                 await Bet.countDocuments({ opponentId: userId, status: 'won' });
-
-    const losses = await Bet.countDocuments({ creatorId: userId, status: 'lost' }) +
-                   await Bet.countDocuments({ opponentId: userId, status: 'lost' });
-
-    // Total Wagered
-    const totalWageredData = await Bet.aggregate([
+    // Total games using an aggregation with $expr and $toString for proper string matching
+    const totalGamesAgg = await Bet.aggregate([
       {
         $match: {
-          $or: [{ creatorId: userId }, { opponentId: userId }],
+          $expr: {
+            $or: [
+              { $eq: [{ $toString: '$creatorId' }, userId] },
+              { $eq: [{ $toString: '$opponentId' }, userId] }
+            ]
+          },
           status: { $in: ['won', 'lost', 'draw'] },
+          currencyType,
+        },
+      },
+      { $count: "totalGames" }
+    ]);
+    const totalGames = totalGamesAgg[0] ? totalGamesAgg[0].totalGames : 0;
+    console.log(`Total games for ${user.username} (${currencyType}): ${totalGames}`);
+
+    // Valid bets using $expr with $toString
+    const validBets = await Bet.find({
+      $expr: {
+        $or: [
+          { $eq: [{ $toString: '$creatorId' }, userId] },
+          { $eq: [{ $toString: '$opponentId' }, userId] }
+        ]
+      },
+      status: { $in: ['won', 'lost', 'draw'] },
+      currencyType,
+    });
+    console.log('Valid bets:', validBets);
+
+    // Wins: count bets where the user is the winner
+    const wins = await Bet.countDocuments({
+      $expr: { $eq: [{ $toString: '$winnerId' }, userId] },
+      currencyType,
+    });
+    console.log(`Wins for ${user.username} (${currencyType}): ${wins}`);
+
+    // Losses: count bets where the user participated but did not win
+    const losses = await Bet.countDocuments({
+      $expr: {
+        $and: [
+          {
+            $or: [
+              { $eq: [{ $toString: '$creatorId' }, userId] },
+              { $eq: [{ $toString: '$opponentId' }, userId] }
+            ]
+          },
+          { $ne: [{ $toString: '$winnerId' }, userId] }
+        ]
+      },
+      status: { $in: ['won', 'lost'] },
+      currencyType,
+    });
+    console.log(`Losses for ${user.username} (${currencyType}): ${losses}`);
+
+    // Total wagered and average wager aggregation
+    const wagerAgg = await Bet.aggregate([
+      {
+        $match: {
+          $expr: {
+            $or: [
+              { $eq: [{ $toString: '$creatorId' }, userId] },
+              { $eq: [{ $toString: '$opponentId' }, userId] }
+            ]
+          },
+          status: { $in: ['won', 'lost', 'draw'] },
+          currencyType,
         },
       },
       {
@@ -44,63 +100,79 @@ const getUserProfile = async (req, res) => {
         },
       },
     ]);
+    const totalWagered = wagerAgg[0]?.totalWagered || 0;
+    const averageWager = wagerAgg[0]?.averageWager || 0;
+    console.log(`Total wagered: ${totalWagered}, Average wager: ${averageWager} (${currencyType})`);
 
-    const totalWagered = totalWageredData[0]?.totalWagered || 0;
-    const averageWager = totalWageredData[0]?.averageWager || 0;
-
-    // Total Winnings and Losses
-    const totalWinningsData = await Bet.aggregate([
+    // Total winnings aggregation (using $ifNull in case 'winnings' isn’t set)
+    const winningsAgg = await Bet.aggregate([
       {
         $match: {
-          $or: [{ creatorId: userId, status: 'won' }, { opponentId: userId, status: 'won' }],
+          $expr: { $eq: [{ $toString: '$winnerId' }, userId] },
+          currencyType,
         },
       },
       {
         $group: {
           _id: null,
-          totalWinnings: { $sum: '$winnings' }, // Assuming 'winnings' field exists
+          totalWinnings: { $sum: { $ifNull: ['$winnings', 0] } },
         },
       },
     ]);
+    const totalWinnings = winningsAgg[0]?.totalWinnings || 0;
+    console.log(`Total winnings for ${user.username} (${currencyType}): ${totalWinnings}`);
 
-    const totalWinnings = totalWinningsData[0]?.totalWinnings || 0;
-
-    const totalLossesData = await Bet.aggregate([
+    // Total losses aggregation for bets lost by the user
+    const lossesAgg = await Bet.aggregate([
       {
         $match: {
-          $or: [{ creatorId: userId, status: 'lost' }, { opponentId: userId, status: 'lost' }],
+          $expr: {
+            $and: [
+              {
+                $or: [
+                  { $eq: [{ $toString: '$creatorId' }, userId] },
+                  { $eq: [{ $toString: '$opponentId' }, userId] }
+                ]
+              },
+              { $ne: [{ $toString: '$winnerId' }, userId] }
+            ]
+          },
+          status: { $in: ['won', 'lost'] },
+          currencyType,
         },
       },
       {
         $group: {
           _id: null,
-          totalLosses: { $sum: '$amount' }, // Assuming 'amount' represents the loss
+          totalLosses: { $sum: '$amount' },
         },
       },
     ]);
-
-    const totalLosses = totalLossesData[0]?.totalLosses || 0;
+    const totalLosses = lossesAgg[0]?.totalLosses || 0;
+    console.log(`Total losses for ${user.username} (${currencyType}): ${totalLosses}`);
 
     // Calculate ROI
-    const averageROI = totalWagered > 0 ? ((totalWinnings - totalLosses) / totalWagered * 100).toFixed(2) : '0.00';
+    const averageROI =
+      totalWagered > 0 ? (((totalWinnings - totalLosses) / totalWagered) * 100).toFixed(2) : '0.00';
+    console.log(`Calculated ROI for ${user.username} (${currencyType}): ${averageROI}%`);
 
-    // Assuming 'karma' and 'membership' are fields in User model
-    const { karma, membership, balance } = user;
-
+    const { karma, membership, tokenBalance } = user;
+    console.log('Sending user profile response');
     res.json({
       user: {
         username: user.username,
         email: user.email,
         role: user.role,
-        balance,
+        balance: tokenBalance,
         karma,
         membership,
         lichessConnected: !!user.lichessConnectedAt,
         lichessUsername: user.lichessUsername,
-        // Add other necessary fields
       },
       statistics: {
         totalGames,
+        wins,
+        losses,
         averageWager,
         totalWagered,
         averageROI,
@@ -108,21 +180,18 @@ const getUserProfile = async (req, res) => {
         totalLosses,
         karma,
         membership,
-        points: balance, // Assuming 'balance' represents points
+        points: tokenBalance,
       },
     });
   } catch (error) {
-    console.error('Error fetching user profile:', error.message);
+    console.error('Error fetching user profile:', error);
     res.status(500).json({ error: 'Failed to fetch user profile' });
   }
 };
 
-/**
- * Get authenticated user's data, including notifications.
- */
 const getUserData = async (req, res) => {
   try {
-    const userId = req.user.id; // Assuming authenticateToken sets req.user
+    const userId = req.user.id;
     const user = await User.findById(userId).select('+lichessAccessToken notifications');
 
     if (!user) {
@@ -136,12 +205,9 @@ const getUserData = async (req, res) => {
   }
 };
 
-/**
- * Retrieves the authenticated user's token and sweepstakes balances.
- */
 const getUserBalances = async (req, res) => {
   try {
-    const userId = req.user.id; // Ensure authentication middleware sets req.user
+    const userId = req.user.id;
     const user = await User.findById(userId).select('tokenBalance sweepstakesBalance');
 
     if (!user) {
@@ -159,3 +225,4 @@ const getUserBalances = async (req, res) => {
 };
 
 module.exports = { getUserProfile, getUserData, getUserBalances };
+

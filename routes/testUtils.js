@@ -62,7 +62,6 @@ router.post('/set-lichess-token', async (req, res) => {
   }
 });
 
-// **New Endpoint to Conclude Game**
 // POST /test/conclude-game
 router.post('/conclude-game', async (req, res) => {
   console.log('concluding game for testing purposes');
@@ -88,26 +87,29 @@ router.post('/conclude-game', async (req, res) => {
       return res.status(400).json({ error: `Cannot conclude bet with status '${bet.status}'.` });
     }
 
-    // Set the outcome
-    bet.status = outcome === 'draw' ? 'draw' : 'won';
-    bet.winnerId = outcome === 'white' ? bet.finalWhiteId : outcome === 'black' ? bet.finalBlackId : null;
+    // Set outcome and update winnings
+    if (outcome === 'draw') {
+      bet.status = 'draw';
+      bet.winnerId = null;
+      bet.winnings = 0;
+    } else {
+      bet.status = 'won';
+      bet.winnerId = outcome === 'white' ? bet.finalWhiteId : bet.finalBlackId;
+      bet.winnings = bet.amount * 2;
+    }
     await bet.save();
 
-    // Credit the winner if not a draw
     if (outcome !== 'draw') {
       const winnerId = outcome === 'white' ? bet.finalWhiteId : bet.finalBlackId;
-
-      // Fetch the winner's User document
       const winnerUser = await User.findById(winnerId);
       if (!winnerUser) {
         return res.status(404).json({ error: 'Winner user not found.' });
       }
-
-      // Update the token balance
-      winnerUser.tokenBalance += bet.amount * 2; // Assuming pot is twice the bet amount
+      // Credit using winnings field
+      winnerUser.tokenBalance += bet.winnings;
       await winnerUser.save();
     } else {
-      // Refund both players in case of a draw
+      // Refund both players for a draw
       bet.creatorId.tokenBalance += bet.amount;
       if (bet.opponentId) {
         bet.opponentId.tokenBalance += bet.amount;
