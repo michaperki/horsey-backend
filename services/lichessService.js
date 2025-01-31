@@ -120,7 +120,7 @@ const createLichessGame = async (timeControl, variant, creatorAccessToken, oppon
 /**
  * Fetches the outcome of a game from Lichess API or returns a mocked outcome.
  * @param {string} gameId - The ID of the game.
- * @returns {object} - { success: boolean, outcome: 'white' | 'black' | 'draw', error?: string }
+ * @returns {object} - { success: boolean, outcome: 'white' | 'black' | 'draw', whiteUsername: string, blackUsername: string, error?: string }
  */
 const getGameOutcome = async (gameId) => {
   console.debug(`Starting getGameOutcome for Game ID: ${gameId}`);
@@ -137,7 +137,7 @@ const getGameOutcome = async (gameId) => {
     const response = await axios.get(url, {
       headers: {
         'Accept': 'application/json',
-        // 'Authorization': `Bearer YOUR_ACCESS_TOKEN`, // Not required for public games
+        'Authorization': `Bearer ${process.env.LICHESS_OAUTH_TOKEN}`, // Add Authorization header
       },
     });
 
@@ -151,16 +151,24 @@ const getGameOutcome = async (gameId) => {
       throw new Error('Invalid game data received from Lichess.');
     }
 
-    const { winner, status } = gameData;
-    console.debug(`Game status: ${status}, Winner: ${winner}`);
+    const { winner, status, termination } = gameData;
+    console.debug(`Game status: ${status}, Winner: ${winner}, Termination: ${termination}`);
 
     let outcome;
     if (status === 'draw') {
       outcome = 'draw';
-    } else if (winner === 'white') {
+    } else if (status === 'mate' && winner === 'white') {
       outcome = 'white';
-    } else if (winner === 'black') {
+    } else if (status === 'mate' && winner === 'black') {
       outcome = 'black';
+    } else if (status === 'resign') {
+      outcome = winner; // 'white' or 'black'
+    } else if (status === 'timeout') {
+      outcome = winner; // 'white' or 'black'
+    } else if (status === 'aborted') {
+      // Handle aborted games as needed
+      console.warn('Game was aborted.');
+      return { success: false, error: 'Game was aborted.' };
     } else {
       console.warn('Unexpected game status or ongoing game:', status);
       return { success: false, error: 'Game is still ongoing or has an unexpected status.' };

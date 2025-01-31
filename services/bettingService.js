@@ -1,114 +1,115 @@
+
 // backend/services/bettingService.js
 
-const { getGameOutcome } = require('./lichessService');
+const mongoose = require('mongoose');
 const Bet = require('../models/Bet');
 const User = require('../models/User');
-const mongoose = require('mongoose');
+const { getGameOutcome } = require('./lichessService');
 const { sendNotification } = require('./notificationService');
 
 /**
- * Processes the outcome of a game by transferring tokens within the database.
- * @param {string} gameId - The ID of the Lichess game.
- * @returns {Object} - Success status and a message.
+ * Processes bets for a concluded game.
+ * - Updates winner/loser balances
+ * - Handles draw refunds
+ * - Sends notifications with old/new balances
  */
 const processBetOutcome = async (gameId) => {
-  // Step 1: Fetch game outcome from Lichess
+  // 1. Fetch outcome from Lichess
   const gameResult = await getGameOutcome(gameId);
-
   if (!gameResult.success) {
     throw new Error(`Failed to fetch game outcome: ${gameResult.error}`);
   }
 
-  const { outcome } = gameResult; // Expected to be 'white', 'black', or 'draw'
+  const { outcome, whiteUsername, blackUsername } = gameResult;
 
-  // Step 2: Retrieve all matched bets associated with this gameId
-  const bets = await Bet.find({ gameId, status: 'matched' }).populate('creatorId opponentId');
-
-  if (!bets || bets.length === 0) {
-    throw new Error('No matched bets found for this game.');
+  // 2. Retrieve matching bets
+  const bets = await Bet.find({ gameId, status: 'matched' });
+  if (!bets.length) {
+    throw new Error(`No matched bets found for game ${gameId}.`);
   }
 
-  // Initialize a session for transactional operations
+  // 3. Identify actual white/black users
+  const whiteUser = await User.findOne({ lichessUsername: whiteUsername });
+  const blackUser = await User.findOne({ lichessUsername: blackUsername });
+
+  // (It's possible these might be missing for some reason; handle gracefully)
+  if (!whiteUser || !blackUser) {
+    throw new Error(`Could not find white or black user for game ${gameId}.`);
+  }
+
+  // 4. Transactional handling
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
     for (const bet of bets) {
-      let winnerId = null;
-      let payoutAmount = bet.amount * 2; // Total pot
+      // Set final white/black references
+      bet.finalWhiteId = whiteUser._id;
+      bet.finalBlackId = blackUser._id;
 
+      // Distinguish draw vs. winner
       if (outcome === 'draw') {
-        // In case of a draw, refund both players
-        const creator = bet.creatorId;
-        const opponent = bet.opponentId;
-
-        if (!creator || !opponent) {
-          throw new Error('Creator or Opponent not found for the bet.');
-        }
-
-        if (bet.currencyType === 'sweepstakes') {
-          creator.sweepstakesBalance += bet.amount;
-          opponent.sweepstakesBalance += bet.amount;
-        } else {
-          creator.tokenBalance += bet.amount;
-          opponent.tokenBalance += bet.amount;
-        }
-
         bet.status = 'draw';
-        await creator.save({ session });
-        await opponent.save({ session });
-
-        // Notify both users about the draw
-        await sendNotification(creator._id, `Your bet on game ${gameId} ended in a draw. Your tokens have been refunded.`, 'betDrawn');
-        await sendNotification(opponent._id, `Your bet on game ${gameId} ended in a draw. Your tokens have been refunded.`, 'betDrawn');
+        bet.winnerId = null;
+        await handleDraw(bet, whiteUser, blackUser, session);
       } else {
-        // Determine the winner based on the outcome
-        if (bet.creatorColor === outcome) {
-          winnerId = bet.creatorId._id;
-        } else {
-          winnerId = bet.opponentId._id;
-        }
-
-        const winner = await User.findById(winnerId).session(session);
-        if (!winner) {
-          throw new Error(`Winner with ID ${winnerId} not found.`);
-        }
-
-        // Update the winner's balance based on currencyType
-        if (bet.currencyType === 'sweepstakes') {
-          winner.sweepstakesBalance += payoutAmount;
-        } else {
-          winner.tokenBalance += payoutAmount;
-        }
-
-        // Update bet status and winner information
         bet.status = 'won';
-        bet.winnerId = winnerId;
-        await winner.save({ session });
-
-        // Notify the winner
-        await sendNotification(winnerId, `Congratulations! You won ${payoutAmount} tokens from game ${gameId}.`, 'tokensWon');
+        // Determine winner based on final outcome
+        const winner = outcome === 'white' ? whiteUser : blackUser;
+        bet.winnerId = winner._id;
+        await handleWin(bet, winner, session);
       }
-
       await bet.save({ session });
     }
 
-    // Commit the transaction
     await session.commitTransaction();
     session.endSession();
 
-    return {
-      success: true,
-      message: `Processed bets for Game ID ${gameId} successfully.`,
-    };
+    return { success: true, message: `Processed bets for Game ID ${gameId}.` };
   } catch (error) {
-    // Abort the transaction in case of error
     await session.abortTransaction();
     session.endSession();
     console.error('Error processing bet outcome:', error);
     throw error;
   }
 };
+
+async function handleDraw(bet, whiteUser, blackUser, session) {
+  const refund = bet.amount;
+  if (bet.currencyType === 'sweepstakes') {
+    await refundBalance(whiteUser, refund, 'sweepstakesBalance', bet.gameId, session);
+    await refundBalance(blackUser, refund, 'sweepstakesBalance', bet.gameId, session);
+  } else {
+    await refundBalance(whiteUser, refund, 'tokenBalance', bet.gameId, session);
+    await refundBalance(blackUser, refund, 'tokenBalance', bet.gameId, session);
+  }
+}
+
+async function refundBalance(user, amount, balanceKey, gameId, session) {
+  const oldBalance = user[balanceKey];
+  user[balanceKey] += amount;
+  await user.save({ session });
+  await sendNotification(
+    user._id,
+    `Game ${gameId} ended in a draw. Refunded ${amount}. Old: ${oldBalance}, New: ${user[balanceKey]}`,
+    'betDrawn'
+  );
+}
+
+async function handleWin(bet, winner, session) {
+  const pot = bet.amount * 2;
+  const balanceKey = bet.currencyType === 'sweepstakes' ? 'sweepstakesBalance' : 'tokenBalance';
+
+  const oldBalance = winner[balanceKey];
+  winner[balanceKey] += pot;
+  await winner.save({ session });
+
+  await sendNotification(
+    winner._id,
+    `Congrats! You won ${pot}. Old: ${oldBalance}, New: ${winner[balanceKey]}`,
+    'tokensWon'
+  );
+}
 
 module.exports = { processBetOutcome };
 
