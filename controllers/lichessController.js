@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { sendEmail } = require('../services/emailService');
 const { getGameOutcome } = require('../services/lichessService');
+const { calculateRatingClassAndKarma } = require('../services/ratingService');
 const Bet = require('../models/Bet');
 
 // In-memory store for OAuth data. For production, use a persistent store like Redis.
@@ -204,6 +205,7 @@ const handleLichessCallback = async (req, res) => {
 
     // Log the extracted ratings for verification
     console.log(`Extracted Ratings for user ${username}:`, JSON.stringify(extractedRatings, null, 2));
+    const { ratingClass, karma } = calculateRatingClassAndKarma(perfs);
 
     // Update the user's Lichess information in the database
     await User.findByIdAndUpdate(userId, {
@@ -213,6 +215,8 @@ const handleLichessCallback = async (req, res) => {
       lichessRefreshToken: refresh_token,
       lichessConnectedAt: new Date(), // Set the connection timestamp
       lichessRatings: extractedRatings, // Assign mapped ratings
+      ratingClass,  // from service
+      karma,        // from service
     });
 
     // Clear the OAuth data from the store

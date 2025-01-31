@@ -180,6 +180,7 @@ const getUserProfile = async (req, res) => {
         totalLosses,
         karma,
         membership,
+        ratingClass: user.ratingClass, // Include rating class in response
         points: tokenBalance,
       },
     });

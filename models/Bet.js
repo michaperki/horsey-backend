@@ -61,11 +61,12 @@ const BetSchema = new mongoose.Schema(
       type: String,
       default: '5|3',
     },
-    variant: {
-      type: String,
-      enum: ['standard', 'crazyhouse', 'chess960'],
-      default: 'standard',
-    },
+    ratingClass: { type: String, default: null },
+      variant: {
+        type: String,
+        enum: ['standard', 'crazyhouse', 'chess960'],
+        default: 'standard',
+      },
     expiresAt: {
       type: Date,
       default: null,

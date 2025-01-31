@@ -108,6 +108,11 @@ const UserSchema = new mongoose.Schema(
         default: true,
       },
     },
+    ratingClass: {
+      type: String,
+      enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'], // adjust as needed
+      default: 'Intermediate'
+    },
 
     // **Lichess Integration Fields**
     lichessId: {

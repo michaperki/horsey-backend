@@ -112,10 +112,11 @@ const mapTimeControlToRatingCategory = (minutes) => {
 };
 
 const getAvailableSeekers = async (req, res) => {
-  const { currencyType } = req.query; // Get currencyType from the request query
-
+  const { currencyType } = req.query; 
   try {
-    const filter = { status: 'pending' };
+    // Get current user's rating class
+    const currentUser = await User.findById(req.user.id).select('ratingClass');
+    const filter = { status: 'pending', ratingClass: currentUser.ratingClass };
 
     // Add currencyType filter if provided
     if (currencyType) {
@@ -242,6 +243,7 @@ const placeBet = async (req, res) => {
       amount,
       currencyType, // Store which currency was used
       timeControl,
+      ratingClass: user.ratingClass,
       variant,
       status: 'pending',
       expiresAt: new Date(Date.now() + 30 * 60 * 1000),
