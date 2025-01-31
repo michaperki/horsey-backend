@@ -4,8 +4,8 @@
 const mockedGameOutcome = {
     success: true,
     outcome: 'white', // or 'black' or 'draw'
-    white: 'mockChallenger',
-    black: 'mockOpponent',
+    whiteUsername: 'mockChallenger',
+    blackUsername: 'mockOpponent',
     status: 'concluded',
 };
 

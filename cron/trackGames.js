@@ -12,6 +12,12 @@ const User = require('../models/User');
  * Starts the cron job to track and process game outcomes.
  */
 function startTrackingGames() {
+  // Skip cron job in test environments
+  if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'cypress') {
+    console.log('Cron job skipped in test/cypress environment.');
+    return;
+  }
+
   // Schedule this job to run every minute
   cron.schedule('* * * * *', async () => {
     try {
