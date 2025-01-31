@@ -8,12 +8,14 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 let ioInstance;
+let gamesPlayedToday = 0;
 
-/**
- * Initializes the Socket.io server.
- * @param {http.Server} server - The HTTP server instance.
- * @returns {Server} - The initialized Socket.io server.
- */
+const broadcastStats = (io) => {
+  const onlineUsers = io.sockets.sockets.size;
+  console.log("online users:", onlineUsers);
+  io.emit("liveStats", { onlineUsers, gamesPlayed: gamesPlayedToday });
+};
+
 const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
@@ -26,44 +28,54 @@ const initializeSocket = (server) => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    // Additional options can be added here
   });
 
   ioInstance = io;
 
-  // Middleware to authenticate Socket.io connections
+  // Middleware to handle authentication, allowing guest connections if no token is provided.
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     const ip = socket.handshake.address;
     console.log(`Socket.io connection attempt from IP: ${ip}`);
 
-    if (!token) {
-      console.error(`Authentication failed: No token provided. IP: ${ip}`);
-      return next(new Error('Authentication error: Token required'));
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = decoded;
+        console.log(`Authentication successful for user ID: ${socket.user.id}`);
+      } catch (err) {
+        console.error(`Authentication failed: Invalid token from IP: ${ip}. Error: ${err.message}`);
+        return next(new Error('Authentication error: Invalid token'));
+      }
+    } else {
+      console.log(`No token provided, allowing guest connection from IP: ${ip}`);
+      socket.user = { id: `guest-${Math.random().toString(36).substring(2, 9)}` };
     }
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = decoded; // Attach user info to socket
-      console.log(`Authentication successful for user ID: ${socket.user.id}`);
-      next();
-    } catch (err) {
-      console.error(`Authentication failed: Invalid token from IP: ${ip}. Error: ${err.message}`);
-      next(new Error('Authentication error: Invalid token'));
-    }
+    next();
   });
 
-  // Handle Socket.io connections
   io.on('connection', (socket) => {
     console.log(`User connected: ID=${socket.user.id}, SocketID=${socket.id}`);
-
-    // Join a room specific to the user for targeted notifications
     socket.join(socket.user.id);
-    console.log(`User ID=${socket.user.id} joined room: ${socket.user.id}`);
+    
+    // Immediately send live stats to the connected socket
+    socket.emit("liveStats", { onlineUsers: io.sockets.sockets.size, gamesPlayed: gamesPlayedToday });
+    
+    // Listen for explicit client requests for live stats
+    socket.on("getLiveStats", () => {
+      socket.emit("liveStats", { onlineUsers: io.sockets.sockets.size, gamesPlayed: gamesPlayedToday });
+    });
 
-    // Optional: Listen to custom events for additional debugging
+    // Broadcast updated stats to everyone
+    broadcastStats(io);
+
     socket.on('client_event', (data) => {
       console.log(`Received 'client_event' from User ID=${socket.user.id}:`, data);
-      // Handle the event as needed
+    });
+
+    socket.on('gameFinished', () => {
+      gamesPlayedToday++;
+      broadcastStats(io);
     });
 
     socket.on('disconnecting', () => {
@@ -72,6 +84,7 @@ const initializeSocket = (server) => {
 
     socket.on('disconnect', (reason) => {
       console.log(`User disconnected: ID=${socket.user.id}, Reason: ${reason}`);
+      broadcastStats(io);
     });
 
     socket.on('error', (error) => {
@@ -79,7 +92,6 @@ const initializeSocket = (server) => {
     });
   });
 
-  // Handle global Socket.io errors
   io.on('error', (error) => {
     console.error('Global Socket.io error:', error);
   });
@@ -87,10 +99,6 @@ const initializeSocket = (server) => {
   return io;
 };
 
-/**
- * Retrieves the initialized Socket.io instance.
- * @returns {Server} - The Socket.io server instance.
- */
 const getIO = () => {
   if (!ioInstance) {
     throw new Error('Socket.io not initialized!');
@@ -98,5 +106,4 @@ const getIO = () => {
   return ioInstance;
 };
 
-module.exports = { initializeSocket, getIO };
-
+module.exports = { initializeSocket, getIO, broadcastStats };
