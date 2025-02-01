@@ -37,7 +37,9 @@ connectDB()
       console.log(`Backend server is running on port ${PORT}`);
       // Initialize the cron job
       startTrackingGames(); // Correctly invoke the function
-      console.log('Cron job for tracking games started.');
+      require('./cron/resetStats'); // schedules the reset stats job
+
+      console.log('Cron jobs for tracking games and resetting stats started.');
     });
   })
   .catch((error) => {

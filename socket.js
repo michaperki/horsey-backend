@@ -4,16 +4,16 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const { getStats } = require('./services/statsService');
 
 dotenv.config();
 
 let ioInstance;
-let gamesPlayedToday = 0;
 
-const broadcastStats = (io) => {
+const broadcastStats = async (io) => {
   const onlineUsers = io.sockets.sockets.size;
-  console.log("online users:", onlineUsers);
-  io.emit("liveStats", { onlineUsers, gamesPlayed: gamesPlayedToday });
+  const stats = await getStats(onlineUsers);
+  io.emit("liveStats", stats);
 };
 
 const initializeSocket = (server) => {
@@ -32,7 +32,6 @@ const initializeSocket = (server) => {
 
   ioInstance = io;
 
-  // Middleware to handle authentication, allowing guest connections if no token is provided.
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     const ip = socket.handshake.address;
@@ -44,7 +43,7 @@ const initializeSocket = (server) => {
         socket.user = decoded;
         console.log(`Authentication successful for user ID: ${socket.user.id}`);
       } catch (err) {
-        console.error(`Authentication failed: Invalid token from IP: ${ip}. Error: ${err.message}`);
+        console.error(`Authentication failed from IP: ${ip}: ${err.message}`);
         return next(new Error('Authentication error: Invalid token'));
       }
     } else {
@@ -54,37 +53,35 @@ const initializeSocket = (server) => {
     next();
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     console.log(`User connected: ID=${socket.user.id}, SocketID=${socket.id}`);
     socket.join(socket.user.id);
-    
-    // Immediately send live stats to the connected socket
-    socket.emit("liveStats", { onlineUsers: io.sockets.sockets.size, gamesPlayed: gamesPlayedToday });
-    
-    // Listen for explicit client requests for live stats
-    socket.on("getLiveStats", () => {
-      socket.emit("liveStats", { onlineUsers: io.sockets.sockets.size, gamesPlayed: gamesPlayedToday });
+
+    const onlineUsers = io.sockets.sockets.size;
+    socket.emit("liveStats", await getStats(onlineUsers));
+
+    socket.on("getLiveStats", async () => {
+      socket.emit("liveStats", await getStats(io.sockets.sockets.size));
     });
 
-    // Broadcast updated stats to everyone
-    broadcastStats(io);
+    await broadcastStats(io);
 
     socket.on('client_event', (data) => {
       console.log(`Received 'client_event' from User ID=${socket.user.id}:`, data);
     });
 
-    socket.on('gameFinished', () => {
-      gamesPlayedToday++;
-      broadcastStats(io);
+    socket.on('gameFinished', async () => {
+      // Assume Bet updates are handled elsewhere.
+      await broadcastStats(io);
     });
 
     socket.on('disconnecting', () => {
       console.log(`User ID=${socket.user.id} is disconnecting from rooms: ${[...socket.rooms]}`);
     });
 
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', async (reason) => {
       console.log(`User disconnected: ID=${socket.user.id}, Reason: ${reason}`);
-      broadcastStats(io);
+      await broadcastStats(io);
     });
 
     socket.on('error', (error) => {
