@@ -1,10 +1,10 @@
-
 // backend/routes/user.js
 
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { getUserData, getUserBalances } = require('../controllers/userController');
+const { asyncHandler } = require('../middleware/errorMiddleware');
 
 /**
  * @route   GET /user/data
@@ -21,4 +21,3 @@ router.get('/data', authenticateToken, getUserData);
 router.get('/balances', authenticateToken, getUserBalances);
 
 module.exports = router;
-

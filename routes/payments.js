@@ -1,12 +1,15 @@
+// backend/routes/payments.js
 
 const express = require('express');
 const Stripe = require('stripe');
 const mongoose = require('mongoose');
-const User = require('../models/User'); // Assuming the User model is already defined
-const Purchase = require('../models/Purchase'); // Purchase model from above
+const User = require('../models/User');
+const Purchase = require('../models/Purchase');
+const { asyncHandler } = require('../middleware/errorMiddleware');
+const { ValidationError, ResourceNotFoundError, ExternalServiceError } = require('../utils/errorTypes');
 
 const router = express.Router();
-const stripe = new Stripe('your_stripe_secret_key'); // Replace with actual Stripe secret key
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY); // Use environment variable
 
 // Helper function to handle payment success and update balances
 const handlePaymentSuccess = async (userId, amountPaid, paymentMethod) => {
@@ -19,7 +22,7 @@ const handlePaymentSuccess = async (userId, amountPaid, paymentMethod) => {
   // Find user and update balances
   const user = await User.findById(userId);
   if (!user) {
-    throw new Error('User not found');
+    throw new ResourceNotFoundError('User');
   }
 
   user.tokenBalance += playerTokens;
@@ -43,28 +46,28 @@ const handlePaymentSuccess = async (userId, amountPaid, paymentMethod) => {
 };
 
 // POST /payments/purchase
-router.post('/purchase', async (req, res) => {
+router.post('/purchase', asyncHandler(async (req, res) => {
   const { userId, paymentMethod, amount } = req.body;
 
   // Validate input
   if (!userId || !paymentMethod || !amount) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    throw new ValidationError('Missing required fields');
   }
 
   if (amount <= 0) {
-    return res.status(400).json({ error: 'Amount must be greater than 0' });
+    throw new ValidationError('Amount must be greater than 0');
   }
 
   const supportedPaymentMethods = ['stripe', 'crypto'];
   if (!supportedPaymentMethods.includes(paymentMethod)) {
-    return res.status(400).json({ error: 'Unsupported payment method' });
+    throw new ValidationError(`Unsupported payment method. Supported methods: ${supportedPaymentMethods.join(', ')}`);
   }
 
-  try {
-    let amountPaid = 0;
+  let amountPaid = 0;
 
-    // Mock or simulate a payment based on the payment method
-    if (paymentMethod === 'stripe') {
+  // Mock or simulate a payment based on the payment method
+  if (paymentMethod === 'stripe') {
+    try {
       // Mock: Create a payment intent (In real world, you will initiate a real Stripe payment)
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount * 100, // Convert dollars to cents
@@ -75,26 +78,42 @@ router.post('/purchase', async (req, res) => {
       if (paymentIntent.status === 'succeeded') {
         amountPaid = amount; // Set the amount paid as the request amount
       } else {
-        throw new Error('Payment failed');
+        throw new ExternalServiceError('Stripe', 'Payment failed');
       }
-    } else if (paymentMethod === 'crypto') {
-      // Mock crypto payment success (For now, simulate success)
-      amountPaid = amount;
+    } catch (error) {
+      throw new ExternalServiceError('Stripe', `Payment processing failed: ${error.message}`);
     }
-
-    // Handle successful payment and update balances
-    const { playerTokens, sweepstakesTokens } = await handlePaymentSuccess(userId, amountPaid, paymentMethod);
-
-    return res.json({
-      message: 'Payment successful',
-      updatedBalances: {
-        playerTokens,
-        sweepstakesTokens
-      }
-    });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+  } else if (paymentMethod === 'crypto') {
+    // Mock crypto payment success (For now, simulate success)
+    amountPaid = amount;
   }
-});
+
+  // Handle successful payment and update balances
+  const { playerTokens, sweepstakesTokens } = await handlePaymentSuccess(userId, amountPaid, paymentMethod);
+
+  return res.json({
+    message: 'Payment successful',
+    updatedBalances: {
+      playerTokens,
+      sweepstakesTokens
+    }
+  });
+}));
+
+// GET /payments/history
+router.get('/history', asyncHandler(async (req, res) => {
+  const { userId } = req.query;
+
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ValidationError('Valid userId is required');
+  }
+
+  const purchases = await Purchase.find({ userId }).sort({ createdAt: -1 });
+
+  res.json({
+    purchases,
+    total: purchases.length
+  });
+}));
 
 module.exports = router;

@@ -7,82 +7,75 @@ const User = require('../models/User');
 const dotenv = require('dotenv');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { getUserProfile } = require('../controllers/userController');
+const { asyncHandler } = require('../middleware/errorMiddleware');
+const { ValidationError, ResourceNotFoundError, ResourceConflictError, AuthenticationError } = require('../utils/errorTypes');
+
 dotenv.config();
 
 // POST /auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
   // Basic input validation
   if (!username || !email || !password) {
-    return res.status(400).json({ error: 'All fields are required' });
+    throw new ValidationError('All fields are required');
   }
 
-  try {
-    // Check if user/email already exists
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Username or email already in use' });
-    }
-
-    // Hash the password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create and save the user
-    const newUser = new User({
-      username,
-      email,
-      password: hashedPassword,
-    });
-
-    await newUser.save();
-
-    res.status(201).json({ message: 'User registered successfully' });
-  } catch (error) {
-    console.error('Registration error:', error.message);
-    res.status(500).json({ error: 'Server error during registration' });
+  // Check if user/email already exists
+  const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+  if (existingUser) {
+    throw new ResourceConflictError('Username or email already in use');
   }
-});
+
+  // Hash the password
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+  // Create and save the user
+  const newUser = new User({
+    username,
+    email,
+    password: hashedPassword,
+  });
+
+  await newUser.save();
+
+  res.status(201).json({ message: 'User registered successfully' });
+}));
 
 // POST /auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   // Basic input validation
   if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+    throw new ValidationError('Email and password are required');
   }
 
-  try {
-    // Find the user by email
-    const user = await User.findOne({ email, role: 'user' });
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    // Compare passwords
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    // Create JWT payload
-    const payload = {
-      id: user._id,
-      username: user.username,
-      role: user.role,
-    };
-
-    // Sign JWT
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    res.json({ message: 'Login successful', token });
-  } catch (error) {
-    console.error('Login error:', error.message);
-    res.status(500).json({ error: 'Server error during login' });
+  // Find the user by email
+  const user = await User.findOne({ email, role: 'user' });
+  if (!user) {
+    throw new AuthenticationError('Invalid credentials');
   }
-});
+
+  // Compare passwords
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    throw new AuthenticationError('Invalid credentials');
+  }
+
+  // Create JWT payload
+  const payload = {
+    id: user._id,
+    username: user.username,
+    role: user.role,
+  };
+
+  // Sign JWT
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+  res.json({ message: 'Login successful', token });
+}));
 
 /**
  * @route   GET /auth/profile

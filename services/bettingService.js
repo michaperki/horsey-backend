@@ -1,4 +1,3 @@
-
 // backend/services/bettingService.js
 
 const mongoose = require('mongoose');
@@ -6,6 +5,7 @@ const Bet = require('../models/Bet');
 const User = require('../models/User');
 const { getGameOutcome } = require('./lichessService');
 const { sendNotification } = require('./notificationService');
+const { ResourceNotFoundError, ExternalServiceError, DatabaseError } = require('../utils/errorTypes');
 
 /**
  * Processes bets for a concluded game.
@@ -17,7 +17,7 @@ const processBetOutcome = async (gameId) => {
   // 1. Fetch outcome from Lichess
   const gameResult = await getGameOutcome(gameId);
   if (!gameResult.success) {
-    throw new Error(`Failed to fetch game outcome: ${gameResult.error}`);
+    throw new ExternalServiceError('Lichess', `Failed to fetch game outcome: ${gameResult.error}`);
   }
 
   const { outcome, whiteUsername, blackUsername } = gameResult;
@@ -25,7 +25,7 @@ const processBetOutcome = async (gameId) => {
   // 2. Retrieve matching bets
   const bets = await Bet.find({ gameId, status: 'matched' });
   if (!bets.length) {
-    throw new Error(`No matched bets found for game ${gameId}.`);
+    throw new ResourceNotFoundError(`No matched bets found for game ${gameId}`);
   }
 
   // 3. Identify actual white/black users
@@ -34,7 +34,7 @@ const processBetOutcome = async (gameId) => {
 
   // (It's possible these might be missing for some reason; handle gracefully)
   if (!whiteUser || !blackUser) {
-    throw new Error(`Could not find white or black user for game ${gameId}.`);
+    throw new ResourceNotFoundError(`Could not find white or black user for game ${gameId}`);
   }
 
   // 4. Transactional handling
@@ -70,7 +70,19 @@ const processBetOutcome = async (gameId) => {
     await session.abortTransaction();
     session.endSession();
     console.error('Error processing bet outcome:', error);
-    throw error;
+    
+    // Re-throw as DatabaseError if it's a DB-related error
+    if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+      throw new DatabaseError(`Failed to process bet outcome: ${error.message}`);
+    }
+    
+    // Re-throw AppErrors as is
+    if (error.isOperational) {
+      throw error;
+    }
+    
+    // Otherwise, throw a generic error
+    throw new Error(`Failed to process bet outcome: ${error.message}`);
   }
 };
 
@@ -88,12 +100,17 @@ async function handleDraw(bet, whiteUser, blackUser, session) {
 async function refundBalance(user, amount, balanceKey, gameId, session) {
   const oldBalance = user[balanceKey];
   user[balanceKey] += amount;
-  await user.save({ session });
-  await sendNotification(
-    user._id,
-    `Game ${gameId} ended in a draw. Refunded ${amount}. Old: ${oldBalance}, New: ${user[balanceKey]}`,
-    'betDrawn'
-  );
+  
+  try {
+    await user.save({ session });
+    await sendNotification(
+      user._id,
+      `Game ${gameId} ended in a draw. Refunded ${amount}. Old: ${oldBalance}, New: ${user[balanceKey]}`,
+      'betDrawn'
+    );
+  } catch (error) {
+    throw new DatabaseError(`Failed to refund user balance: ${error.message}`);
+  }
 }
 
 async function handleWin(bet, winner, session) {
@@ -103,14 +120,17 @@ async function handleWin(bet, winner, session) {
 
   const oldBalance = winner[balanceKey];
   winner[balanceKey] += pot;
-  await winner.save({ session });
-
-  await sendNotification(
-    winner._id,
-    `Congrats! You won ${pot}. Old: ${oldBalance}, New: ${winner[balanceKey]}`,
-    'tokensWon'
-  );
+  
+  try {
+    await winner.save({ session });
+    await sendNotification(
+      winner._id,
+      `Congrats! You won ${pot}. Old: ${oldBalance}, New: ${winner[balanceKey]}`,
+      'tokensWon'
+    );
+  } catch (error) {
+    throw new DatabaseError(`Failed to update winner balance: ${error.message}`);
+  }
 }
 
 module.exports = { processBetOutcome };
-

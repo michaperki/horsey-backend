@@ -1,17 +1,18 @@
-
-// backend/controllers/betController.js
+// backend/controllers/betController.js - Updated with error handling
 
 const mongoose = require('mongoose');
 const axios = require('axios');
 const Bet = require('../models/Bet');
 const User = require('../models/User');
 const { getGameOutcome, createLichessGame, getUsernameFromAccessToken } = require('../services/lichessService');
+const { asyncHandler } = require('../middleware/errorMiddleware');
+const { ResourceNotFoundError, ValidationError, AuthorizationError, ExternalServiceError } = require('../utils/errorTypes');
 
 /**
  * Retrieves the bet history for the authenticated user.
  * Supports pagination and sorting.
  */
-const getBetHistory = async (req, res) => {
+const getBetHistory = asyncHandler(async (req, res) => {
   const userId = req.user.id;
 
   console.log("Fetching bet history for:", userId);
@@ -35,7 +36,7 @@ const getBetHistory = async (req, res) => {
   };
 
   if (status) {
-    filter.status = status; // e.g. { $or: [...], status: 'pending' }
+    filter.status = status;
   }
   if (fromDate || toDate) {
     filter.createdAt = {};
@@ -56,7 +57,7 @@ const getBetHistory = async (req, res) => {
     }
   }
   if (color) {
-    filter.creatorColor = color; // Or filter by finalWhiteId/finalBlackId if needed
+    filter.creatorColor = color;
   }
   if (timeControl) {
     filter.timeControl = timeControl;
@@ -64,36 +65,29 @@ const getBetHistory = async (req, res) => {
 
   const validSortFields = ['createdAt', 'amount', 'gameId', 'status'];
   if (!validSortFields.includes(sortBy)) {
-    return res.status(400).json({ 
-      error: `Invalid sort field. Valid fields are: ${validSortFields.join(', ')}`,
-    });
+    throw new ValidationError(`Invalid sort field. Valid fields are: ${validSortFields.join(', ')}`);
   }
 
   const sortOrder = order === 'asc' ? 1 : -1;
 
-  try {
-    const bets = await Bet.find(filter)
-      .sort({ [sortBy]: sortOrder })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit, 10))
-      .populate('creatorId', 'username')
-      .populate('opponentId', 'username');
+  const bets = await Bet.find(filter)
+    .sort({ [sortBy]: sortOrder })
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit, 10))
+    .populate('creatorId', 'username')
+    .populate('opponentId', 'username');
 
-    const totalBets = await Bet.countDocuments(filter);
-    const totalPages = Math.ceil(totalBets / limit);
+  const totalBets = await Bet.countDocuments(filter);
+  const totalPages = Math.ceil(totalBets / limit);
 
-    res.json({
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      totalBets,
-      totalPages,
-      bets,
-    });
-  } catch (error) {
-    console.error(`Error fetching bet history for user ${userId}:`, error.message);
-    res.status(500).json({ error: 'An unexpected error occurred while fetching bet history.' });
-  }
-};
+  res.json({
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
+    totalBets,
+    totalPages,
+    bets,
+  });
+});
 
 /**
  * Maps timeControl to ratingCategory based on predefined rules.
@@ -111,64 +105,41 @@ const mapTimeControlToRatingCategory = (minutes) => {
   }
 };
 
-const getAvailableSeekers = async (req, res) => {
+const getAvailableSeekers = asyncHandler(async (req, res) => {
   const { currencyType } = req.query; 
-  try {
-    // Get current user's rating class
-    const currentUser = await User.findById(req.user.id).select('ratingClass');
-    const filter = { status: 'pending', ratingClass: currentUser.ratingClass };
+  
+  // Get current user's rating class
+  const currentUser = await User.findById(req.user.id).select('ratingClass');
+  if (!currentUser) {
+    throw new ResourceNotFoundError('User');
+  }
+  
+  const filter = { status: 'pending', ratingClass: currentUser.ratingClass };
 
-    // Add currencyType filter if provided
-    if (currencyType) {
-      filter.currencyType = currencyType;
-    }
+  // Add currencyType filter if provided
+  if (currencyType) {
+    filter.currencyType = currencyType;
+  }
 
-    const pendingBets = await Bet.find(filter)
-      .populate('creatorId', 'username tokenBalance sweepstakesBalance lichessRatings lichessUsername');
+  const pendingBets = await Bet.find(filter)
+    .populate('creatorId', 'username tokenBalance sweepstakesBalance lichessRatings lichessUsername');
 
-    const seekers = pendingBets.map((bet) => {
-      const { timeControl, variant, currencyType } = bet;
-      const ratings = bet.creatorId.lichessRatings || {};
+  const seekers = pendingBets.map((bet) => {
+    const { timeControl, variant, currencyType } = bet;
+    const ratings = bet.creatorId.lichessRatings || {};
 
-      const [minutesStr, incrementStr] = timeControl.split('|');
-      const minutes = parseInt(minutesStr, 10);
-      const increment = parseInt(incrementStr, 10);
+    const [minutesStr, incrementStr] = timeControl.split('|');
+    const minutes = parseInt(minutesStr, 10);
+    const increment = parseInt(incrementStr, 10);
 
-      if (isNaN(minutes) || isNaN(increment)) {
-        return {
-          id: bet._id,
-          creator: bet.creatorId.username,
-          creatorLichessUsername: bet.creatorId.lichessUsername,
-          tokenBalance: bet.creatorId.tokenBalance,
-          sweepstakesBalance: bet.creatorId.sweepstakesBalance,
-          rating: null,
-          colorPreference: bet.creatorColor,
-          timeControl: bet.timeControl,
-          variant: bet.variant,
-          currencyType,
-          wager: bet.amount,
-          players: 2,
-          createdAt: bet.createdAt,
-          creatorRatings: bet.creatorId.lichessRatings,
-        };
-      }
-
-      const ratingCategory = mapTimeControlToRatingCategory(minutes);
-      let relevantRating = null;
-
-      if (variant.toLowerCase() === 'standard') {
-        relevantRating = ratings['standard']?.[ratingCategory] || null;
-      } else {
-        relevantRating = ratings[variant.toLowerCase()]?.overall || null;
-      }
-
+    if (isNaN(minutes) || isNaN(increment)) {
       return {
         id: bet._id,
         creator: bet.creatorId.username,
         creatorLichessUsername: bet.creatorId.lichessUsername,
         tokenBalance: bet.creatorId.tokenBalance,
         sweepstakesBalance: bet.creatorId.sweepstakesBalance,
-        rating: relevantRating,
+        rating: null,
         colorPreference: bet.creatorColor,
         timeControl: bet.timeControl,
         variant: bet.variant,
@@ -178,270 +149,297 @@ const getAvailableSeekers = async (req, res) => {
         createdAt: bet.createdAt,
         creatorRatings: bet.creatorId.lichessRatings,
       };
-    });
+    }
 
-    res.json({ seekers });
-  } catch (error) {
-    console.error('Error fetching seekers:', error.message);
-    res.status(500).json({ error: 'An unexpected error occurred while fetching seekers.' });
-  }
-};
+    const ratingCategory = mapTimeControlToRatingCategory(minutes);
+    let relevantRating = null;
+
+    if (variant.toLowerCase() === 'standard') {
+      relevantRating = ratings['standard']?.[ratingCategory] || null;
+    } else {
+      relevantRating = ratings[variant.toLowerCase()]?.overall || null;
+    }
+
+    return {
+      id: bet._id,
+      creator: bet.creatorId.username,
+      creatorLichessUsername: bet.creatorId.lichessUsername,
+      tokenBalance: bet.creatorId.tokenBalance,
+      sweepstakesBalance: bet.creatorId.sweepstakesBalance,
+      rating: relevantRating,
+      colorPreference: bet.creatorColor,
+      timeControl: bet.timeControl,
+      variant: bet.variant,
+      currencyType,
+      wager: bet.amount,
+      players: 2,
+      createdAt: bet.createdAt,
+      creatorRatings: bet.creatorId.lichessRatings,
+    };
+  });
+
+  res.json({ seekers });
+});
 
 /**
  * Places a new bet with an expiration time (e.g., 30 minutes).
  */
-const placeBet = async (req, res) => {
-  const { colorPreference, amount, timeControl, variant, currencyType } = req.body; // Include currencyType
+const placeBet = asyncHandler(async (req, res) => {
+  const { colorPreference, amount, timeControl, variant, currencyType } = req.body;
   const creatorId = req.user.id;
 
   // Basic validations
   const validVariants = ['standard', 'crazyhouse', 'chess960'];
-  const validCurrencyTypes = ['token', 'sweepstakes']; // Define valid currency types
+  const validCurrencyTypes = ['token', 'sweepstakes'];
+  
   if (!['white', 'black', 'random'].includes(colorPreference)) {
-    return res.status(400).json({ error: 'colorPreference must be "white", "black", or "random"' });
+    throw new ValidationError('colorPreference must be "white", "black", or "random"');
   }
+  
   if (!validVariants.includes(variant)) {
-    return res.status(400).json({ error: `variant must be one of: ${validVariants.join(', ')}` });
+    throw new ValidationError(`variant must be one of: ${validVariants.join(', ')}`);
   }
-  if (!validCurrencyTypes.includes(currencyType)) { // Validate currencyType
-    return res.status(400).json({ error: `currencyType must be one of: ${validCurrencyTypes.join(', ')}` });
+  
+  if (!validCurrencyTypes.includes(currencyType)) {
+    throw new ValidationError(`currencyType must be one of: ${validCurrencyTypes.join(', ')}`);
   }
+  
   if (!amount || amount <= 0) {
-    return res.status(400).json({ error: 'amount must be a positive number' });
+    throw new ValidationError('amount must be a positive number');
   }
+  
   if (!timeControl || !/^\d+\|\d+$/.test(timeControl)) {
-    return res.status(400).json({ error: 'timeControl must be in the format "minutes|increment"' });
+    throw new ValidationError('timeControl must be in the format "minutes|increment"');
   }
 
-  try {
-    const user = await User.findById(creatorId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    // Determine which balance to use based on currencyType
-    let currentBalance;
-    if (currencyType === 'sweepstakes') {
-      currentBalance = user.sweepstakesBalance;
-    } else {
-      currentBalance = user.tokenBalance;
-    }
-
-    if (currentBalance < amount) {
-      return res.status(400).json({ error: `Insufficient ${currencyType} balance` });
-    }
-
-    // Deduct from the appropriate balance
-    if (currencyType === 'sweepstakes') {
-      user.sweepstakesBalance -= amount;
-    } else {
-      user.tokenBalance -= amount;
-    }
-    await user.save();
-
-    const newBet = new Bet({
-      creatorId,
-      creatorColor: colorPreference,
-      amount,
-      currencyType, // Store which currency was used
-      timeControl,
-      ratingClass: user.ratingClass,
-      variant,
-      status: 'pending',
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-    });
-    await newBet.save();
-
-    // Optional socket event
-    const io = req.app.get('io');
-    io.to(creatorId.toString()).emit('betCreated', {
-      message: 'Your bet has been placed successfully!',
-      bet: {
-        id: newBet._id,
-        creatorColor: newBet.creatorColor,
-        amount: newBet.amount,
-        currencyType: newBet.currencyType, // Include currencyType in the event
-        timeControl: newBet.timeControl,
-        variant: newBet.variant,
-        createdAt: newBet.createdAt,
-      },
-    });
-
-    return res.status(201).json({ message: 'Bet placed successfully', bet: newBet });
-  } catch (error) {
-    console.error('Error placing bet:', error.message);
-    return res.status(500).json({ error: 'Server error while placing bet' });
+  const user = await User.findById(creatorId);
+  if (!user) {
+    throw new ResourceNotFoundError('User');
   }
-};
+
+  // Determine which balance to use based on currencyType
+  let currentBalance;
+  if (currencyType === 'sweepstakes') {
+    currentBalance = user.sweepstakesBalance;
+  } else {
+    currentBalance = user.tokenBalance;
+  }
+
+  if (currentBalance < amount) {
+    throw new ValidationError(`Insufficient ${currencyType} balance`);
+  }
+
+  // Deduct from the appropriate balance
+  if (currencyType === 'sweepstakes') {
+    user.sweepstakesBalance -= amount;
+  } else {
+    user.tokenBalance -= amount;
+  }
+  await user.save();
+
+  const newBet = new Bet({
+    creatorId,
+    creatorColor: colorPreference,
+    amount,
+    currencyType,
+    timeControl,
+    ratingClass: user.ratingClass,
+    variant,
+    status: 'pending',
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  });
+  await newBet.save();
+
+  // Optional socket event
+  const io = req.app.get('io');
+  io.to(creatorId.toString()).emit('betCreated', {
+    message: 'Your bet has been placed successfully!',
+    bet: {
+      id: newBet._id,
+      creatorColor: newBet.creatorColor,
+      amount: newBet.amount,
+      currencyType: newBet.currencyType,
+      timeControl: newBet.timeControl,
+      variant: newBet.variant,
+      createdAt: newBet.createdAt,
+    },
+  });
+
+  return res.status(201).json({ message: 'Bet placed successfully', bet: newBet });
+});
 
 /**
  * Accepts a pending bet, assigns colors, deducts tokens, creates a Lichess game, and updates the bet.
  */
-const acceptBet = async (req, res) => {
-    const { betId } = req.params;
-    const opponentId = req.user.id;
+const acceptBet = asyncHandler(async (req, res) => {
+  const { betId } = req.params;
+  const opponentId = req.user.id;
 
-    if (!mongoose.Types.ObjectId.isValid(betId)) {
-        return res.status(400).json({ error: 'Invalid bet ID' });
+  if (!mongoose.Types.ObjectId.isValid(betId)) {
+    throw new ValidationError('Invalid bet ID');
+  }
+
+  const bet = await Bet.findOneAndUpdate(
+    { _id: betId, status: 'pending', opponentId: null },
+    { opponentId, status: 'matched' },
+    { new: true }
+  ).populate('creatorId');
+
+  if (!bet) {
+    throw new ResourceNotFoundError('Bet is no longer available or does not exist');
+  }
+
+  if (opponentId.toString() === bet.creatorId._id.toString()) {
+    await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+    throw new ValidationError('You cannot accept your own bet.');
+  }
+
+  const opponent = await User.findById(opponentId);
+  if (!opponent) {
+    await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+    throw new ResourceNotFoundError('Opponent user');
+  }
+
+  let opponentCurrentBalance = bet.currencyType === 'sweepstakes' 
+    ? opponent.sweepstakesBalance 
+    : opponent.tokenBalance;
+
+  if (opponentCurrentBalance < bet.amount) {
+    await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
+    throw new ValidationError(`Insufficient ${bet.currencyType} balance to accept this bet`);
+  }
+
+  if (bet.currencyType === 'sweepstakes') {
+    opponent.sweepstakesBalance -= bet.amount;
+  } else {
+    opponent.tokenBalance -= bet.amount;
+  }
+  await opponent.save();
+
+  let finalWhiteId, finalBlackId;
+  if (bet.creatorColor === 'random') {
+    if (Math.random() < 0.5) {
+      finalWhiteId = bet.creatorId._id;
+      finalBlackId = opponentId;
+    } else {
+      finalWhiteId = opponentId;
+      finalBlackId = bet.creatorId._id;
+    }
+  } else {
+    finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
+    finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
+  }
+
+  const [whiteUser, blackUser] = await Promise.all([
+    User.findById(finalWhiteId).select('+lichessAccessToken username _id'),
+    User.findById(finalBlackId).select('+lichessAccessToken username _id'),
+  ]);
+
+  if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
+    console.error('Missing Lichess OAuth tokens.');
+    if (bet.currencyType === 'sweepstakes') {
+      opponent.sweepstakesBalance += bet.amount;
+    } else {
+      opponent.tokenBalance += bet.amount;
+    }
+    await opponent.save();
+    bet.status = 'pending';
+    bet.opponentId = null;
+    await bet.save();
+    throw new ValidationError('Both users must connect their Lichess accounts.');
+  }
+
+  try {
+    const lichessResponse = await createLichessGame(
+      bet.timeControl,
+      bet.variant,
+      whiteUser.lichessAccessToken,
+      blackUser.lichessAccessToken,
+      getUsernameFromAccessToken
+    );
+
+    if (!lichessResponse.success) {
+      if (bet.currencyType === 'sweepstakes') {
+        opponent.sweepstakesBalance += bet.amount;
+      } else {
+        opponent.tokenBalance += bet.amount;
+      }
+      await opponent.save();
+      bet.status = 'pending';
+      bet.opponentId = null;
+      await bet.save();
+      throw new ExternalServiceError('Lichess', lichessResponse.error);
     }
 
-    try {
-        const bet = await Bet.findOneAndUpdate(
-            { _id: betId, status: 'pending', opponentId: null },
-            { opponentId, status: 'matched' },
-            { new: true }
-        ).populate('creatorId');
+    bet.finalWhiteId = finalWhiteId;
+    bet.finalBlackId = finalBlackId;
+    bet.gameId = lichessResponse.gameId;
+    bet.gameLink = lichessResponse.gameLink;
+    bet.status = 'matched';
+    await bet.save();
 
-        if (!bet) {
-            return res.status(400).json({ error: 'Bet is no longer available or does not exist' });
-        }
+    const io = req.app.get('io');
+    io.to(bet.creatorId._id.toString()).emit('betAccepted', {
+      message: 'Your bet has been accepted!',
+      bet,
+      gameLink: bet.gameLink,
+    });
 
-        if (opponentId.toString() === bet.creatorId._id.toString()) {
-            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-            return res.status(400).json({ error: 'You cannot accept your own bet.' });
-        }
+    io.to(opponentId.toString()).emit('betAccepted', {
+      message: 'You have accepted a bet!',
+      bet,
+      gameLink: bet.gameLink,
+    });
 
-        const opponent = await User.findById(opponentId);
-        if (!opponent) {
-            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-            return res.status(404).json({ error: 'Opponent user not found' });
-        }
-
-        let opponentCurrentBalance = bet.currencyType === 'sweepstakes' 
-            ? opponent.sweepstakesBalance 
-            : opponent.tokenBalance;
-
-        if (opponentCurrentBalance < bet.amount) {
-            await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
-            return res.status(400).json({ error: `Insufficient ${bet.currencyType} balance to accept this bet` });
-        }
-
-        if (bet.currencyType === 'sweepstakes') {
-            opponent.sweepstakesBalance -= bet.amount;
-        } else {
-            opponent.tokenBalance -= bet.amount;
-        }
-        await opponent.save();
-
-        let finalWhiteId, finalBlackId;
-        if (bet.creatorColor === 'random') {
-            if (Math.random() < 0.5) {
-                finalWhiteId = bet.creatorId._id;
-                finalBlackId = opponentId;
-            } else {
-                finalWhiteId = opponentId;
-                finalBlackId = bet.creatorId._id;
-            }
-        } else {
-            finalWhiteId = bet.creatorColor === 'white' ? bet.creatorId._id : opponentId;
-            finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
-        }
-
-        const [whiteUser, blackUser] = await Promise.all([
-            User.findById(finalWhiteId).select('+lichessAccessToken username _id'),
-            User.findById(finalBlackId).select('+lichessAccessToken username _id'),
-        ]);
-
-        if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
-            console.error('Missing Lichess OAuth tokens.');
-            if (bet.currencyType === 'sweepstakes') {
-                opponent.sweepstakesBalance += bet.amount;
-            } else {
-                opponent.tokenBalance += bet.amount;
-            }
-            await opponent.save();
-            bet.status = 'pending';
-            bet.opponentId = null;
-            await bet.save();
-            return res.status(400).json({ error: 'Both users must connect their Lichess accounts.' });
-        }
-
-        const lichessResponse = await createLichessGame(
-            bet.timeControl,
-            bet.variant,
-            whiteUser.lichessAccessToken,
-            blackUser.lichessAccessToken,
-            getUsernameFromAccessToken
-        );
-
-        if (!lichessResponse.success) {
-            if (bet.currencyType === 'sweepstakes') {
-                opponent.sweepstakesBalance += bet.amount;
-            } else {
-                opponent.tokenBalance += bet.amount;
-            }
-            await opponent.save();
-            bet.status = 'pending';
-            bet.opponentId = null;
-            await bet.save();
-            return res.status(500).json({ error: 'Failed to create Lichess game', details: lichessResponse.error });
-        }
-
-        bet.finalWhiteId = finalWhiteId;
-        bet.finalBlackId = finalBlackId;
-        bet.gameId = lichessResponse.gameId;
-        bet.gameLink = lichessResponse.gameLink;
-        bet.status = 'matched';
-        await bet.save();
-
-        const io = req.app.get('io');
-        io.to(bet.creatorId._id.toString()).emit('betAccepted', {
-            message: 'Your bet has been accepted!',
-            bet,
-            gameLink: bet.gameLink,
-        });
-
-        io.to(opponentId.toString()).emit('betAccepted', {
-            message: 'You have accepted a bet!',
-            bet,
-            gameLink: bet.gameLink,
-        });
-
-        return res.json({
-            message: 'Bet matched successfully',
-            bet,
-            gameId: lichessResponse.gameId,
-            gameLink: lichessResponse.gameLink,
-        });
-    } catch (error) {
-        console.error('Error accepting bet:', error);
-        return res.status(500).json({ error: 'An unexpected error occurred while accepting the bet.' });
+    return res.json({
+      message: 'Bet matched successfully',
+      bet,
+      gameId: lichessResponse.gameId,
+      gameLink: lichessResponse.gameLink,
+    });
+  } catch (error) {
+    // If the error is already an AppError, it will be caught by the errorHandler middleware
+    if (error.isOperational) {
+      throw error;
     }
-};
+    // Otherwise, wrap in an ExternalServiceError
+    throw new ExternalServiceError('Lichess', error.message);
+  }
+});
 
-const cancelBet = async (req, res) => {
+const cancelBet = asyncHandler(async (req, res) => {
   const { betId } = req.params;
   const userId = req.user.id;
 
   if (!mongoose.Types.ObjectId.isValid(betId)) {
-    return res.status(400).json({ error: 'Invalid bet ID' });
+    throw new ValidationError('Invalid bet ID');
   }
 
-  try {
-    // Use findOneAndUpdate to handle concurrency; only update if status = 'pending'
-    const bet = await Bet.findOneAndUpdate(
-      { _id: betId, creatorId: userId, status: 'pending' },
-      { status: 'canceled' },
-      { new: true }
-    );
+  // Use findOneAndUpdate to handle concurrency; only update if status = 'pending'
+  const bet = await Bet.findOneAndUpdate(
+    { _id: betId, creatorId: userId, status: 'pending' },
+    { status: 'canceled' },
+    { new: true }
+  );
 
-    if (!bet) {
-      return res.status(400).json({ error: 'Bet not found or not in pending status' });
-    }
-
-    // Restore user balance based on currencyType
-    const user = await User.findById(userId);
-    if (bet.currencyType === 'sweepstakes') {
-      user.sweepstakesBalance += bet.amount;
-    } else {
-      user.tokenBalance += bet.amount;
-    }
-    await user.save();
-
-    return res.json({ message: 'Bet canceled successfully', bet });
-  } catch (error) {
-    console.error('Error cancelling bet:', error);
-    return res.status(500).json({ error: 'Server error while cancelling bet' });
+  if (!bet) {
+    throw new ResourceNotFoundError('Bet not found or not in pending status');
   }
-};
+
+  // Restore user balance based on currencyType
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ResourceNotFoundError('User');
+  }
+  
+  if (bet.currencyType === 'sweepstakes') {
+    user.sweepstakesBalance += bet.amount;
+  } else {
+    user.tokenBalance += bet.amount;
+  }
+  await user.save();
+
+  return res.json({ message: 'Bet canceled successfully', bet });
+});
 
 module.exports = { getAvailableSeekers, getBetHistory, placeBet, acceptBet, cancelBet };
-

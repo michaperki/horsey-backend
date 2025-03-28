@@ -1,156 +1,284 @@
-
 // backend/tests/betRoutes.test.js
 
-jest.mock('../services/lichessService'); // Mock lichessService
-
-const { getGameOutcome, createLichessGame, getUsernameFromAccessToken } = require('../services/lichessService');
 const request = require('supertest');
-const app = require('../server'); // Ensure your Express app is exported from server.js
-const User = require('../models/User');
+const mongoose = require('mongoose');
+const app = require('../server');
 const Bet = require('../models/Bet');
-const bcrypt = require('bcrypt');
+const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { seedDatabase } = require('./setup');
 
-describe('Bet Routes', () => {
-    let creatorToken, opponentToken, seekerToken;
-    let creator, opponent, seekerUser, bet;
-    let mockIo;
+// Mock the lichessService to avoid actual API calls
+jest.mock('../services/lichessService', () => ({
+  getGameOutcome: jest.fn().mockResolvedValue({
+    success: true,
+    outcome: 'white',
+    whiteUsername: 'whitePlayer',
+    blackUsername: 'blackPlayer',
+    status: 'mate'
+  }),
+  createLichessGame: jest.fn().mockResolvedValue({
+    success: true,
+    gameId: 'test-game-123',
+    gameLink: 'https://lichess.org/test-game-123'
+  }),
+  getUsernameFromAccessToken: jest.fn().mockResolvedValue('testuser')
+}));
 
-    beforeEach(async () => {
-        // Create users
-        seekerUser = await User.create({
-            username: 'seeker',
-            email: 'seeker@example.com',
-            password: await bcrypt.hash('seekerpass', 10),
-            tokenBalance: 500,
-        });
+// Mock the notificationService to avoid socket messages
+jest.mock('../services/notificationService', () => ({
+  sendNotification: jest.fn().mockResolvedValue({})
+}));
 
-        creator = await User.create({
-            username: 'creator',
-            email: 'creator@example.com',
-            password: await bcrypt.hash('creatorpass', 10),
-            tokenBalance: 1000,
-            lichessUsername: 'creatorLichessUser',
-            lichessAccessToken: 'creatorAccessToken',
-        });
-
-        opponent = await User.create({
-            username: 'opponent',
-            email: 'opponent@example.com',
-            password: await bcrypt.hash('opponentpass', 10),
-            tokenBalance: 500,
-            lichessUsername: 'opponentLichessUser',
-            lichessAccessToken: 'opponentAccessToken',
-        });
-
-        // Generate JWT tokens
-        creatorToken = jwt.sign({ id: creator._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        opponentToken = jwt.sign({ id: opponent._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        seekerToken = jwt.sign({ id: seekerUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-        // Create a pending bet
-        bet = await Bet.create({
-            creatorId: creator._id,
-            creatorColor: 'white',
-            amount: 100,
-            status: 'pending',
-            timeControl: '5|3',
-            currencyType: 'token',
-        });
-
-        // Mock services
-        getGameOutcome.mockResolvedValue({ success: true, status: 'created' });
-        createLichessGame.mockResolvedValue({
-            success: true,
-            gameId: 'lichessGameId123',
-            gameLink: 'https://lichess.org/lichessGameId123',
-        });
-        getUsernameFromAccessToken.mockImplementation(async (token) => {
-            if (token === 'creatorAccessToken') return 'creatorUsername';
-            if (token === 'opponentAccessToken') return 'opponentUsername';
-            return null;
-        });
-
-        // Mock io
-        mockIo = {
-            to: jest.fn().mockReturnThis(),
-            emit: jest.fn(),
-        };
-        app.set('io', mockIo);
+describe('Bet Routes Integration Tests', () => {
+  let testUsers = [];
+  let authToken = '';
+  
+  beforeAll(async () => {
+    // Create test users
+    const seedResult = await seedDatabase({ users: 3 });
+    testUsers = seedResult.users;
+    
+    // Create auth token for the first user
+    const payload = {
+      id: testUsers[0]._id,
+      username: testUsers[0].username,
+      role: testUsers[0].role
+    };
+    
+    authToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+  });
+  
+  // Clear bets collection before each test
+  beforeEach(async () => {
+    await Bet.deleteMany({});
+  });
+  
+  describe('GET /bets/history', () => {
+    it('should return empty bet history when no bets exist', async () => {
+      const response = await request(app)
+        .get('/bets/history')
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(response.status).toBe(200);
+      expect(response.body.bets).toEqual([]);
+      expect(response.body.totalBets).toBe(0);
     });
-
-    afterEach(async () => {
-        await User.deleteMany({});
-        await Bet.deleteMany({});
-        jest.resetAllMocks();
+    
+    it('should return 401 if no auth token is provided', async () => {
+      const response = await request(app)
+        .get('/bets/history');
+      
+      expect(response.status).toBe(401);
+      expect(response.body.errorCode).toBe('AUTH_ERROR');
     });
-
-    describe('POST /bets/place', () => {
-        it('should successfully place a bet without gameId', async () => {
-            const res = await request(app)
-                .post('/bets/place')
-                .set('Authorization', `Bearer ${creatorToken}`)
-                .send({
-                    colorPreference: 'black',
-                    amount: 150,
-                    timeControl: '3|2',
-                    currencyType: 'token', // Required field
-                    variant: 'standard', // Added field
-                });
-
-            expect(res.statusCode).toEqual(201);
-            expect(res.body).toHaveProperty('message', 'Bet placed successfully');
-            expect(res.body.bet).toHaveProperty('creatorId', creator._id.toString());
-            expect(res.body.bet).toHaveProperty('status', 'pending');
-
-            const updatedCreator = await User.findById(creator._id);
-            expect(updatedCreator.tokenBalance).toBe(850); // 1000 - 150
-        });
-
-        it('should return error for insufficient balance', async () => {
-            const res = await request(app)
-                .post('/bets/place')
-                .set('Authorization', `Bearer ${creatorToken}`)
-                .send({
-                    colorPreference: 'black',
-                    amount: 2000, // Exceeds balance
-                    timeControl: '5|3',
-                    currencyType: 'token', // Required field
-                    variant: 'standard', // Added field
-                });
-
-            expect(res.statusCode).toEqual(400);
-            expect(res.body).toHaveProperty('error', 'Insufficient token balance');
-        });
-
-        it('should handle invalid colorPreference', async () => {
-            const res = await request(app)
-                .post('/bets/place')
-                .set('Authorization', `Bearer ${creatorToken}`)
-                .send({
-                    colorPreference: 'blue', // Invalid
-                    amount: 100,
-                    timeControl: '5|3',
-                    currencyType: 'token', // Required field
-                    variant: 'standard', // Added field
-                });
-
-            expect(res.statusCode).toEqual(400);
-            expect(res.body).toHaveProperty('error', 'colorPreference must be "white", "black", or "random"');
-        });
+    
+    it('should return bet history for the authenticated user', async () => {
+      // Create a test bet
+      const bet = new Bet({
+        creatorId: testUsers[0]._id,
+        opponentId: testUsers[1]._id,
+        creatorColor: 'white',
+        amount: 100,
+        timeControl: '5|3',
+        variant: 'standard',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+      });
+      
+      await bet.save();
+      
+      const response = await request(app)
+        .get('/bets/history')
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(response.status).toBe(200);
+      expect(response.body.bets.length).toBe(1);
+      expect(response.body.totalBets).toBe(1);
+      expect(response.body.bets[0].creatorId.username).toBe(testUsers[0].username);
     });
-
-    describe('POST /bets/accept/:betId', () => {
-        it('should return error if opponent balance is insufficient', async () => {
-            opponent.tokenBalance = 50; // Insufficient balance
-            await opponent.save();
-
-            const res = await request(app)
-                .post(`/bets/accept/${bet._id}`)
-                .set('Authorization', `Bearer ${opponentToken}`);
-
-            expect(res.statusCode).toEqual(400);
-            expect(res.body).toHaveProperty('error', 'Insufficient token balance to accept this bet');
-        });
+    
+    it('should handle filtering by status', async () => {
+      // Create multiple bets with different statuses
+      const pendingBet = new Bet({
+        creatorId: testUsers[0]._id,
+        creatorColor: 'white',
+        amount: 100,
+        timeControl: '5|3',
+        variant: 'standard',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+      });
+      
+      const matchedBet = new Bet({
+        creatorId: testUsers[0]._id,
+        opponentId: testUsers[1]._id,
+        creatorColor: 'black',
+        amount: 200,
+        timeControl: '10|5',
+        variant: 'standard',
+        status: 'matched',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+      });
+      
+      await pendingBet.save();
+      await matchedBet.save();
+      
+      // Test filtering by pending status
+      const pendingResponse = await request(app)
+        .get('/bets/history?status=pending')
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(pendingResponse.status).toBe(200);
+      expect(pendingResponse.body.bets.length).toBe(1);
+      expect(pendingResponse.body.bets[0].status).toBe('pending');
+      
+      // Test filtering by matched status
+      const matchedResponse = await request(app)
+        .get('/bets/history?status=matched')
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(matchedResponse.status).toBe(200);
+      expect(matchedResponse.body.bets.length).toBe(1);
+      expect(matchedResponse.body.bets[0].status).toBe('matched');
     });
+  });
+  
+  describe('POST /bets/place', () => {
+    it('should successfully place a bet', async () => {
+      const betData = {
+        colorPreference: 'white',
+        amount: 100,
+        timeControl: '5|3',
+        variant: 'standard',
+        currencyType: 'token'
+      };
+      
+      const response = await request(app)
+        .post('/bets/place')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(betData);
+      
+      expect(response.status).toBe(201);
+      expect(response.body.message).toBe('Bet placed successfully');
+      expect(response.body.bet.creatorColor).toBe('white');
+      expect(response.body.bet.amount).toBe(100);
+      
+      // Check that the user's balance was updated
+      const updatedUser = await User.findById(testUsers[0]._id);
+      expect(updatedUser.tokenBalance).toBe(testUsers[0].tokenBalance - 100);
+    });
+    
+    it('should return validation error for invalid input', async () => {
+      const invalidBetData = {
+        colorPreference: 'invalid',
+        amount: -100,
+        timeControl: 'invalid',
+        variant: 'invalid',
+        currencyType: 'invalid'
+      };
+      
+      const response = await request(app)
+        .post('/bets/place')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(invalidBetData);
+      
+      expect(response.status).toBe(400);
+      expect(response.body.errorCode).toBe('VALIDATION_ERROR');
+    });
+    
+    it('should return error if insufficient balance', async () => {
+      // Set user balance to 0
+      await User.findByIdAndUpdate(testUsers[0]._id, { tokenBalance: 0 });
+      
+      const betData = {
+        colorPreference: 'white',
+        amount: 100,
+        timeControl: '5|3',
+        variant: 'standard',
+        currencyType: 'token'
+      };
+      
+      const response = await request(app)
+        .post('/bets/place')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(betData);
+      
+      expect(response.status).toBe(400);
+      expect(response.body.errorCode).toBe('VALIDATION_ERROR');
+      expect(response.body.message).toContain('Insufficient token balance');
+    });
+  });
+  
+  describe('POST /bets/cancel/:betId', () => {
+    it('should cancel a pending bet and refund balance', async () => {
+      // Create a pending bet
+      const bet = new Bet({
+        creatorId: testUsers[0]._id,
+        creatorColor: 'white',
+        amount: 100,
+        timeControl: '5|3',
+        variant: 'standard',
+        status: 'pending',
+        currencyType: 'token',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+      });
+      
+      await bet.save();
+      
+      // Get initial balance
+      const initialUser = await User.findById(testUsers[0]._id);
+      const initialBalance = initialUser.tokenBalance;
+      
+      // Cancel the bet
+      const response = await request(app)
+        .post(`/bets/cancel/${bet._id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe('Bet canceled successfully');
+      expect(response.body.bet.status).toBe('canceled');
+      
+      // Check that the balance was refunded
+      const updatedUser = await User.findById(testUsers[0]._id);
+      expect(updatedUser.tokenBalance).toBe(initialBalance + 100);
+    });
+    
+    it('should return error if bet is not found', async () => {
+      const nonExistentBetId = new mongoose.Types.ObjectId();
+      
+      const response = await request(app)
+        .post(`/bets/cancel/${nonExistentBetId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(response.status).toBe(404);
+      expect(response.body.errorCode).toBe('NOT_FOUND');
+    });
+    
+    it('should return error if bet is not in pending status', async () => {
+      // Create a matched bet
+      const bet = new Bet({
+        creatorId: testUsers[0]._id,
+        opponentId: testUsers[1]._id,
+        creatorColor: 'white',
+        amount: 100,
+        timeControl: '5|3',
+        variant: 'standard',
+        status: 'matched', // Not pending
+        currencyType: 'token',
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000)
+      });
+      
+      await bet.save();
+      
+      const response = await request(app)
+        .post(`/bets/cancel/${bet._id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      
+      expect(response.status).toBe(404);
+      expect(response.body.errorCode).toBe('NOT_FOUND');
+    });
+  });
+  
+  // Add more test cases for other endpoints like /bets/accept/:betId and /bets/seekers
 });

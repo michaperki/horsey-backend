@@ -1,15 +1,16 @@
-
 // backend/controllers/leaderboardController.js
 
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Bet = require('../models/Bet');
+const { asyncHandler } = require('../middleware/errorMiddleware');
+const { DatabaseError } = require('../utils/errorTypes');
 
 /**
  * GET /leaderboard
  * Retrieves the leaderboard data, including username, average rating, win percentage, and number of games.
  */
-const getLeaderboard = async (req, res) => {
+const getLeaderboard = asyncHandler(async (req, res) => {
   try {
     // Define the rating fields to consider
     const ratingFields = ['lichessRatings.bullet', 'lichessRatings.blitz', 'lichessRatings.rapid', 'lichessRatings.classical'];
@@ -124,8 +125,8 @@ const getLeaderboard = async (req, res) => {
     res.json(leaderboard);
   } catch (error) {
     console.error('Error fetching leaderboard:', error.message);
-    res.status(500).json({ error: 'Failed to fetch leaderboard data' });
+    throw new DatabaseError('Failed to fetch leaderboard data');
   }
-};
+});
 
 module.exports = { getLeaderboard };

@@ -1,19 +1,23 @@
-// server.js
+// server.js - Updated with centralized error handling
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const dotenv = require('dotenv');
+const { v4: uuidv4 } = require('uuid'); // Add this package for request IDs
+
+// Import error handling middleware
+const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware');
 
 // Load environment variables
 dotenv.config();
 
+// Import routes
 const adminAuthRoutes = require('./routes/adminAuth');
 const userAuthRoutes = require('./routes/userAuth');
 const userRoutes = require('./routes/user');
 const paymentsRoutes = require('./routes/payments');
 const storeRoutes = require('./routes/store');
 const lichessRoutes = require('./routes/lichess');
-// const tokenRoutes = require('./routes/tokenRoutes');
 const betRoutes = require('./routes/betRoutes');
 const leaderboardRoutes = require('./routes/leaderboard');
 const testEmailRoutes = require('./routes/testEmail');
@@ -46,6 +50,14 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Add request ID middleware
+app.use((req, res, next) => {
+  req.id = uuidv4();
+  // Add the request ID to response headers for debugging
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
 
 // Session Middleware
 app.use(session({
@@ -82,12 +94,10 @@ app.get('/', (req, res) => {
   res.send('Chess Betting Backend is running');
 });
 
-// Error handler for CORS
-app.use((err, req, res, next) => {
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ error: 'CORS error: Origin not allowed' });
-  }
-  next(err);
-});
+// Apply the 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Apply the global error handler as the last middleware
+app.use(errorHandler);
 
 module.exports = app; // Export the app for testing and server setup

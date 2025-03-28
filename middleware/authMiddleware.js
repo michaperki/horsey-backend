@@ -1,6 +1,6 @@
 // backend/middleware/authMiddleware.js
-
 const jwt = require('jsonwebtoken');
+const { AuthenticationError, AuthorizationError } = require('../utils/errorTypes');
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -11,12 +11,12 @@ const authenticateToken = (req, res, next) => {
   const token = tokenFromHeader || tokenFromQuery;
 
   if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+    return next(new AuthenticationError('Access denied. No token provided.'));
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Invalid token.' });
+      return next(new AuthenticationError('Invalid token.'));
     }
     req.user = user;
     next();
@@ -25,7 +25,7 @@ const authenticateToken = (req, res, next) => {
 
 const authorizeRole = (role) => (req, res, next) => {
   if (!req.user || req.user.role !== role) {
-    return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
+    return next(new AuthorizationError('Access denied. Insufficient permissions.'));
   }
   next();
 };
