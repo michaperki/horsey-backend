@@ -1,4 +1,3 @@
-
 // backend/tests/betHistory.test.js
 
 const request = require('supertest');
@@ -118,7 +117,7 @@ describe('GET /bets/history', () => {
 
     expect(res.statusCode).toEqual(400);
     expect(res.body).toHaveProperty(
-      'error',
+      'message',
       'Invalid sort field. Valid fields are: createdAt, amount, gameId, status'
     );
   });
@@ -127,7 +126,7 @@ describe('GET /bets/history', () => {
     const res = await request(app).get('/bets/history').send();
 
     expect(res.statusCode).toEqual(401);
-    expect(res.body).toHaveProperty('error', 'Access denied. No token provided.');
+    expect(res.body).toHaveProperty('message', 'Access denied. No token provided.');
   });
 
   it('should handle server errors gracefully', async () => {
@@ -142,7 +141,7 @@ describe('GET /bets/history', () => {
       .send();
 
     expect(res.statusCode).toEqual(500);
-    expect(res.body).toHaveProperty('error', 'An unexpected error occurred while fetching bet history.');
+    expect(res.body).toHaveProperty('message', 'Database error');
 
     // Restore the original implementation
     Bet.find.mockRestore();

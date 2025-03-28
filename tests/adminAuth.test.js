@@ -1,4 +1,3 @@
-// backend/tests/adminAuth.test.js
 const request = require('supertest');
 const mongoose = require('mongoose');
 const User = require('../models/User');
@@ -18,7 +17,6 @@ describe('Admin Authentication Routes', () => {
   beforeAll(async () => {
     await connect();
 
-    // Ensure JWT_SECRET is set
     if (!process.env.JWT_SECRET) {
       throw new Error('JWT_SECRET is not defined in the environment variables.');
     }
@@ -32,7 +30,6 @@ describe('Admin Authentication Routes', () => {
       role: 'admin',
     });
 
-    // Generate JWT token for admin
     adminToken = jwt.sign(
       { id: adminUser._id, username: adminUser.username, role: adminUser.role },
       process.env.JWT_SECRET,
@@ -48,14 +45,12 @@ describe('Admin Authentication Routes', () => {
       role: 'user',
     });
 
-    // Generate JWT token for non-admin
     nonAdminToken = jwt.sign(
       { id: nonAdminUser._id, username: nonAdminUser.username, role: nonAdminUser.role },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
-    // Import the app after setting up users
     app = require('../server');
   });
 
@@ -63,7 +58,6 @@ describe('Admin Authentication Routes', () => {
   afterEach(async () => {
     await clearDatabase();
 
-    // Re-create admin and non-admin users for each test
     const hashedPasswordAdmin = await bcrypt.hash('adminpass', 10);
     adminUser = await User.create({
       username: 'adminuser',
@@ -104,14 +98,13 @@ describe('Admin Authentication Routes', () => {
         .post('/auth/admin/login')
         .send({
           email: 'admin@example.com',
-          password: 'adminpass', // Correct password
+          password: 'adminpass',
         });
 
       expect(res.statusCode).toEqual(200);
       expect(res.body).toHaveProperty('message', 'Admin login successful');
       expect(res.body).toHaveProperty('token');
 
-      // Optionally, verify the token
       const decoded = jwt.verify(res.body.token, process.env.JWT_SECRET);
       expect(decoded).toHaveProperty('id');
       expect(decoded).toHaveProperty('username', 'adminuser');
@@ -123,11 +116,11 @@ describe('Admin Authentication Routes', () => {
         .post('/auth/admin/login')
         .send({
           email: 'admin@example.com',
-          password: 'wrongpass', // Incorrect password
+          password: 'wrongpass',
         });
 
-      expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('error', 'Invalid credentials');
+      expect(res.statusCode).toEqual(401);
+      expect(res.body).toHaveProperty('message', 'Invalid credentials');
     });
 
     it('should not login non-existent admin', async () => {
@@ -138,20 +131,20 @@ describe('Admin Authentication Routes', () => {
           password: 'adminpass',
         });
 
-      expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('error', 'Invalid credentials');
+      expect(res.statusCode).toEqual(401);
+      expect(res.body).toHaveProperty('message', 'Invalid credentials');
     });
 
     it('should return 400 for missing fields', async () => {
       const res = await request(app)
         .post('/auth/admin/login')
         .send({
-          email: 'admin@example.com',
+          email: 'admin@example.com'
           // Missing password
         });
 
       expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('error', 'Email and password are required');
+      expect(res.body).toHaveProperty('message', 'Email and password are required');
     });
   });
 
@@ -169,7 +162,6 @@ describe('Admin Authentication Routes', () => {
       expect(res.statusCode).toEqual(201);
       expect(res.body).toHaveProperty('message', 'Admin registered successfully');
 
-      // Verify admin is in the database
       const admin = await User.findOne({ email: 'newadmin@example.com' });
       expect(admin).toBeTruthy();
       expect(admin.username).toBe('newadmin');
@@ -187,7 +179,7 @@ describe('Admin Authentication Routes', () => {
         });
 
       expect(res.statusCode).toEqual(401);
-      expect(res.body).toHaveProperty('error', 'Access denied. No token provided.');
+      expect(res.body).toHaveProperty('message', 'Access denied. No token provided.');
     });
 
     it('should not register a new admin without admin role', async () => {
@@ -201,7 +193,7 @@ describe('Admin Authentication Routes', () => {
         });
 
       expect(res.statusCode).toEqual(403);
-      expect(res.body).toHaveProperty('error', 'Access denied. Insufficient permissions.');
+      expect(res.body).toHaveProperty('message', 'Access denied. Insufficient permissions.');
     });
 
     it('should not register a new admin with missing fields', async () => {
@@ -214,7 +206,7 @@ describe('Admin Authentication Routes', () => {
         });
 
       expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('error', 'All fields are required');
+      expect(res.body).toHaveProperty('message', 'All fields are required');
     });
 
     it('should not register a new admin with existing email', async () => {
@@ -238,8 +230,8 @@ describe('Admin Authentication Routes', () => {
           password: 'password456',
         });
 
-      expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('error', 'Username or email already in use');
+      expect(res.statusCode).toEqual(409);
+      expect(res.body).toHaveProperty('message', 'Username or email already in use');
     });
 
     it('should not register a new admin with existing username', async () => {
@@ -263,8 +255,8 @@ describe('Admin Authentication Routes', () => {
           password: 'password456',
         });
 
-      expect(res.statusCode).toEqual(400);
-      expect(res.body).toHaveProperty('error', 'Username or email already in use');
+      expect(res.statusCode).toEqual(409);
+      expect(res.body).toHaveProperty('message', 'Username or email already in use');
     });
 
     it('should handle server errors gracefully during registration', async () => {
@@ -284,10 +276,11 @@ describe('Admin Authentication Routes', () => {
         });
 
       expect(res.statusCode).toEqual(500);
-      expect(res.body).toHaveProperty('error', 'Server error during admin registration');
+      expect(res.body).toHaveProperty('message', 'Database error');
 
       // Restore the original implementation
       User.prototype.save = originalSave;
     });
   });
 });
+

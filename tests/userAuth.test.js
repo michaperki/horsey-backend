@@ -1,12 +1,12 @@
 // backend/tests/userAuth.test.js
-const bcrypt = require('bcrypt'); // Add this line
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const app = require('../server'); // Import the Express app
 const mongoose = require('mongoose');
 const User = require('../models/User');
 
-jest.mock('../services/emailService'); // Uses __mocks__/emailService.js
+jest.mock('../services/emailService'); // Uses **mocks**/emailService.js
 
 describe('POST /auth/register', () => {
   it('should register a new user', async () => {
@@ -20,7 +20,7 @@ describe('POST /auth/register', () => {
 
     expect(res.statusCode).toEqual(201);
     expect(res.body).toHaveProperty('message', 'User registered successfully');
-
+    
     // Verify user is in the database
     const user = await User.findOne({ email: 'testuser@example.com' });
     expect(user).toBeTruthy();
@@ -46,8 +46,8 @@ describe('POST /auth/register', () => {
         password: 'password456',
       });
 
-    expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Username or email already in use');
+    expect(res.statusCode).toEqual(409);
+    expect(res.body).toHaveProperty('message', 'Username or email already in use');
   });
 
   it('should not register a user with missing fields', async () => {
@@ -59,7 +59,7 @@ describe('POST /auth/register', () => {
       });
 
     expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'All fields are required');
+    expect(res.body).toHaveProperty('message', 'All fields are required');
   });
 });
 
@@ -83,7 +83,7 @@ describe('POST /auth/login', () => {
 
     expect(res.statusCode).toEqual(200);
     expect(res.body).toHaveProperty('token');
-
+    
     // Optionally, verify the token
     const decoded = jwt.verify(res.body.token, process.env.JWT_SECRET);
     expect(decoded).toHaveProperty('id');
@@ -99,8 +99,8 @@ describe('POST /auth/login', () => {
         password: 'wrongpassword',
       });
 
-    expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Invalid credentials');
+    expect(res.statusCode).toEqual(401);
+    expect(res.body).toHaveProperty('message', 'Invalid credentials');
   });
 
   it('should not login a non-existent user', async () => {
@@ -111,8 +111,8 @@ describe('POST /auth/login', () => {
         password: 'password123',
       });
 
-    expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Invalid credentials');
+    expect(res.statusCode).toEqual(401);
+    expect(res.body).toHaveProperty('message', 'Invalid credentials');
   });
 
   it('should not login with missing fields', async () => {
@@ -123,6 +123,6 @@ describe('POST /auth/login', () => {
       });
 
     expect(res.statusCode).toEqual(400);
-    expect(res.body).toHaveProperty('error', 'Email and password are required');
+    expect(res.body).toHaveProperty('message', 'Email and password are required');
   });
 });
