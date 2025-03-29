@@ -324,7 +324,7 @@ if (process.env.NODE_ENV === 'production' &&
             {
               headers: {
                 'Content-Type': register.contentType,
-                'Authorization': `Bearer ${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`
+                'Authorization': `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`
               }
             }
           );
