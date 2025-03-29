@@ -34,6 +34,8 @@ const healthRoutes = require('./routes/health');
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Add HTTP metrics collection middleware
 app.use(httpMetricsMiddleware);
 
