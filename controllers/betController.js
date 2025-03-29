@@ -9,6 +9,18 @@ const { asyncHandler } = require('../middleware/errorMiddleware');
 const { ResourceNotFoundError, ValidationError, AuthorizationError, ExternalServiceError } = require('../utils/errorTypes');
 
 /**
+ * Helper function to check if a given game is open for betting.
+ */
+const isGameOpenForBetting = async (gameId) => {
+  const gameResult = await getGameOutcome(gameId);
+  if (!gameResult.success) {
+    throw new ExternalServiceError('Lichess', gameResult.error);
+  }
+  // Betting is open if the game status is 'created' or 'started'
+  return ['created', 'started'].includes(gameResult.status);
+};
+
+/**
  * Retrieves the bet history for the authenticated user.
  * Supports pagination and sorting.
  */
@@ -183,9 +195,10 @@ const getAvailableSeekers = asyncHandler(async (req, res) => {
 
 /**
  * Places a new bet with an expiration time (e.g., 30 minutes).
+ * If a gameId is provided, it checks if betting is open for that game.
  */
 const placeBet = asyncHandler(async (req, res) => {
-  const { colorPreference, amount, timeControl, variant, currencyType } = req.body;
+  const { colorPreference, amount, timeControl, variant, currencyType, gameId } = req.body;
   const creatorId = req.user.id;
 
   // Basic validations
@@ -210,6 +223,14 @@ const placeBet = asyncHandler(async (req, res) => {
   
   if (!timeControl || !/^\d+\|\d+$/.test(timeControl)) {
     throw new ValidationError('timeControl must be in the format "minutes|increment"');
+  }
+
+  // If a gameId is provided, ensure betting is open for that game.
+  if (gameId) {
+    const open = await isGameOpenForBetting(gameId);
+    if (!open) {
+      throw new ValidationError('Betting is closed for this game');
+    }
   }
 
   const user = await User.findById(creatorId);
@@ -247,6 +268,7 @@ const placeBet = asyncHandler(async (req, res) => {
     variant,
     status: 'pending',
     expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+    gameId: gameId || null, // optionally store the gameId if provided
   });
   await newBet.save();
 

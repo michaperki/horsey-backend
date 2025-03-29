@@ -1,31 +1,42 @@
 // backend/index.js
-
 const http = require('http');
 const app = require('./server');
 const connectDB = require('./config/db');
 const dotenv = require('dotenv');
 const { initializeSocket } = require('./socket');
-const jwt = require('jsonwebtoken');
+const seedAdmin = require('./scripts/seedAdmin');
 const { startTrackingGames } = require('./cron/trackGames');
 const { startExpiringBets } = require('./cron/expireBets');
-const seedAdmin = require('./scripts/seedAdmin');
+const logger = require('./utils/logger');
 
+// Load environment variables
 dotenv.config();
 
 // Global error handling for uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...', error);
-  // Log to error monitoring service, if available
-  // You could also implement graceful shutdown logic here
-  process.exit(1);
+  logger.error('UNCAUGHT EXCEPTION! 💥', { 
+    error: error.stack || error.toString(),
+    exitCode: 1
+  });
+  
+  // Don't exit the process in development to allow for debugging
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
 
 // Global error handling for unhandled promise rejections
-process.on('unhandledRejection', (error) => {
-  console.error('UNHANDLED REJECTION! 💥 Shutting down...', error);
-  // Log to error monitoring service, if available
-  // You could also implement graceful shutdown logic here
-  process.exit(1);
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('UNHANDLED REJECTION! 💥', { 
+    reason: reason.stack || reason.toString(),
+    promise: promise.toString(),
+    exitCode: 1
+  });
+  
+  // Don't exit the process in development to allow for debugging
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
 
 // Create HTTP server
@@ -38,45 +49,67 @@ const io = initializeSocket(server);
 app.set('io', io);
 
 // Connect to MongoDB and start the server
-connectDB()
-  .then(async () => {
-    console.log('MongoDB connected successfully.');
-
+async function startServer() {
+  try {
+    logger.info('Starting server initialization...');
+    
+    // Connect to MongoDB
+    try {
+      await connectDB();
+      logger.info('MongoDB connected successfully.');
+    } catch (error) {
+      logger.error('Failed to connect to MongoDB:', { error: error.stack });
+      process.exit(1);
+    }
+    
     // Seed the admin user after successful DB connection
     if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'cypress') {
-      await seedAdmin();
-      console.log('Admin user seeded successfully.');
+      try {
+        await seedAdmin();
+        logger.info('Admin user seeded successfully.');
+      } catch (error) {
+        logger.error('Error seeding admin user:', { error: error.stack });
+        // Continue even if seeding fails
+      }
     }
-
+    
+    // Start the server
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => {
-      console.log(`Backend server is running on port ${PORT}`);
+      logger.info(`Backend server is running on port ${PORT}`);
       
       // Initialize the cron jobs
-      startTrackingGames();
-      startExpiringBets();
-      require('./cron/resetStats'); // schedules the reset stats job
-
-      console.log('Cron jobs for tracking games, expiring bets, and resetting stats started.');
+      try {
+        startTrackingGames();
+        startExpiringBets();
+        require('./cron/resetStats'); // schedules the reset stats job
+        logger.info('Cron jobs for tracking games, expiring bets, and resetting stats started.');
+      } catch (error) {
+        logger.error('Error initializing cron jobs:', { error: error.stack });
+        // Continue even if cron jobs fail to initialize
+      }
     });
     
     // Listen for server close to perform cleanup
     server.on('close', () => {
-      console.log('Server shutting down. Performing cleanup...');
-      // Cleanup logic here if needed
+      logger.info('Server shutting down. Performing cleanup...');
     });
-  })
-  .catch((error) => {
-    console.error('Failed to connect to MongoDB or seed admin:', error);
-    process.exit(1); // Exit the process with failure
-  });
+    
+  } catch (error) {
+    logger.error('Server initialization error:', { error: error.stack });
+    process.exit(1);
+  }
+}
 
-// Graceful shutdown for SIGTERM 
+// Graceful shutdown for SIGTERM
 process.on('SIGTERM', () => {
-  console.log('👋 SIGTERM RECEIVED. Shutting down gracefully');
+  logger.info('👋 SIGTERM RECEIVED. Shutting down gracefully');
   server.close(() => {
-    console.log('💥 Process terminated!');
+    logger.info('💥 Process terminated!');
   });
 });
 
-module.exports = server; // Export the server for testing and other purposes
+// Start the server
+startServer();
+
+module.exports = server;

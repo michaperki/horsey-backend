@@ -1,15 +1,18 @@
-// server.js - Updated with centralized error handling
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
-const dotenv = require('dotenv');
-const { v4: uuidv4 } = require('uuid'); // Add this package for request IDs
+const helmet = require('helmet');
+const { v4: uuidv4 } = require('uuid');
+const config = require('./config');  // New config import
+
+// Import logger and logging middleware
+const logger = require('./utils/logger');
+const { httpLogger, detailedRequestLogger } = require('./middleware/httpLoggerMiddleware');
 
 // Import error handling middleware
 const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware');
-
-// Load environment variables
-dotenv.config();
+// Import rate limiting middleware
+const { apiLimiter, authLimiter, betLimiter } = require('./middleware/rateLimitMiddleware');
 
 // Import routes
 const adminAuthRoutes = require('./routes/adminAuth');
@@ -27,22 +30,33 @@ const notificationRoutes = require('./routes/notification');
 
 const app = express();
 
-// Allowed origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5000',
-  'http://localhost:5000/',
-  'https://horsey-chess.netlify.app',
-  'https://horsey-dd32bf69ae0e.herokuapp.com'
-];
+// Simple HTTP request logging middleware
+app.use(httpLogger);
 
-// Middleware
+// Configure security headers with Helmet
+app.use(helmet());
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+      connectSrc: ["'self'", "https://lichess.org"],
+      imgSrc: ["'self'", "data:", "https://lichess.org"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  })
+);
+
+// Use allowed origins from config for CORS
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || config.cors.allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error(`Blocked by CORS: Origin ${origin} is not allowed`);
+      logger.warn(`Blocked by CORS: Origin ${origin} is not allowed`, { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -54,27 +68,52 @@ app.use(express.json());
 // Add request ID middleware
 app.use((req, res, next) => {
   req.id = uuidv4();
-  // Add the request ID to response headers for debugging
   res.setHeader('X-Request-ID', req.id);
   next();
 });
 
-// Session Middleware
+// Detailed request/response logging middleware
+app.use(detailedRequestLogger);
+
+// Session Middleware using config values
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your_default_session_secret',
+  secret: config.session.secret,
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: process.env.NODE_ENV === 'production' },
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax'
+  },
 }));
 
-// Routes
+// Simple health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Apply general API rate limiter
+app.use(apiLimiter);
+
+// Routes with specific rate limiters
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+app.use('/auth/admin/login', authLimiter);
+
+// Authentication-specific routes
 app.use('/auth', userAuthRoutes);
 app.use('/user', userRoutes);
 app.use('/auth/admin', adminAuthRoutes);
+
+// Bet-specific routes
+app.use('/bets/place', betLimiter);
+app.use('/bets/accept', betLimiter);
+app.use('/bets', betRoutes);
+
+// Other routes
 app.use('/payments', paymentsRoutes);
 app.use('/store', storeRoutes);
 app.use('/lichess', lichessRoutes);
-app.use('/bets', betRoutes);
 app.use('/email', testEmailRoutes);
 app.use('/leaderboard', leaderboardRoutes);
 app.use('/notifications', notificationRoutes);
@@ -82,7 +121,7 @@ app.use('/notifications', notificationRoutes);
 // Test-only routes
 if (process.env.NODE_ENV === 'cypress') {
   app.use('/test', testUtilsRoutes);
-  console.log("Test utility routes added");
+  logger.info("Test utility routes added");
 }
 
 if (process.env.NODE_ENV !== 'production') {
@@ -94,10 +133,10 @@ app.get('/', (req, res) => {
   res.send('Chess Betting Backend is running');
 });
 
-// Apply the 404 handler for undefined routes
+// 404 handler for undefined routes
 app.use(notFoundHandler);
 
-// Apply the global error handler as the last middleware
+// Global error handler
 app.use(errorHandler);
 
-module.exports = app; // Export the app for testing and server setup
+module.exports = app;

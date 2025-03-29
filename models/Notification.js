@@ -22,7 +22,7 @@ const NotificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['tokensWon', 'betPlaced', 'betAccepted', 'payment', 'membership', 'other'], // Define types as needed
+      enum: ['tokensWon', 'betPlaced', 'betAccepted', 'betExpired', 'payment', 'membership', 'other'], // Added 'betExpired'
       default: 'other',
     },
   },

@@ -1,44 +1,33 @@
 
-// backend/routes/betRoutes.js
+// Updating routes/betRoutes.js to include validation
 
 const express = require('express');
 const router = express.Router();
-const Bet = require('../models/Bet');
-const User = require('../models/User'); // Assuming a User model exists
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { getAvailableSeekers, getBetHistory, placeBet, acceptBet, cancelBet } = require('../controllers/betController');
-const { getGameOutcome } = require('../services/lichessService'); // Import the service
-const mongoose = require('mongoose');
-
-const isGameOpenForBetting = async (gameId) => {
-  try {
-    const gameResult = await getGameOutcome(gameId);
-    if (!gameResult.success) {
-      throw new Error(gameResult.error);
-    }
-    // Define your criteria for betting to be open.
-    // For example, betting is open if the game status is 'created' or 'started'.
-    return ['created', 'started'].includes(gameResult.status);
-  } catch (error) {
-    console.error(`Error in isGameOpenForBetting for Game ID ${gameId}:`, error.message);
-    throw error; // Propagate the error to be handled by the route
-  }
-};
-
-// POST /bets/place
-router.post('/place', authenticateToken, placeBet);
-
-// POST /bets/accept/:betId
-router.post('/accept/:betId', authenticateToken, acceptBet);
-
-// GET /bets/history
-router.get('/history', authenticateToken, getBetHistory);
+const { validate, placeBetValidation, betHistoryValidation, acceptBetValidation } = require('../middleware/validationMiddleware');
+const { param } = require('express-validator');
 
 // GET /bets/seekers
 router.get('/seekers', authenticateToken, getAvailableSeekers);
 
+// GET /bets/history with validation
+router.get('/history', authenticateToken, validate(betHistoryValidation), getBetHistory);
+
+// POST /bets/place with validation
+router.post('/place', authenticateToken, validate(placeBetValidation), placeBet);
+
+// POST /bets/accept/:betId with validation
+router.post('/accept/:betId', authenticateToken, validate(acceptBetValidation), acceptBet);
+
 // POST /bets/cancel/:betId
-router.post('/cancel/:betId', authenticateToken, cancelBet);
+router.post('/cancel/:betId', authenticateToken, validate([
+  param('betId').custom(value => {
+    if (!/^[0-9a-fA-F]{24}$/.test(value)) {
+      throw new Error('Invalid bet ID format');
+    }
+    return true;
+  })
+]), cancelBet);
 
 module.exports = router;
-
