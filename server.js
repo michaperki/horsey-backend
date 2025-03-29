@@ -139,54 +139,8 @@ app.use('/email', testEmailRoutes);
 app.use('/leaderboard', leaderboardRoutes);
 app.use('/notifications', notificationRoutes);
 
-
-// Add debug endpoint for Grafana
-app.get('/debug-grafana', async (req, res) => {
-  try {
-    // Import the Prometheus middleware
-    const { pushMetricsToGrafana, register } = require('./middleware/prometheusMiddleware');
-    
-    // Get the metrics
-    const metrics = await register.metrics();
-    
-    // Try to push metrics
-    let pushResult = { skipped: true };
-    if (process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
-      pushResult = await pushMetricsToGrafana();
-    }
-    
-    // Return the results
-    res.json({
-      env: {
-        GRAFANA_CLOUD_PROMETHEUS_URL_exists: !!process.env.GRAFANA_CLOUD_PROMETHEUS_URL,
-        GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN_exists: !!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN,
-        GRAFANA_CLOUD_USERNAME_exists: !!process.env.GRAFANA_CLOUD_USERNAME,
-        NODE_ENV: process.env.NODE_ENV
-      },
-      metricsSize: metrics?.length || 0,
-      metricsPreview: metrics?.substring(0, 200) + '...',
-      pushResult
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// Make metrics endpoint unprotected in production for testing
-if (process.env.NODE_ENV === 'production') {
-  // Create an unprotected endpoint just for testing
-  app.get('/metrics-debug', async (req, res) => {
-    try {
-      const { metricsHandler } = require('./middleware/prometheusMiddleware');
-      await metricsHandler(req, res);
-    } catch (error) {
-      res.status(500).send(`Error: ${error.message}`);
-    }
-  });
-}
+// Add this route before your other metrics route
+app.get('/debug-grafana', require('./middleware/prometheusMiddleware').metricsDebugHandler);
 
 
 // Test-only routes
