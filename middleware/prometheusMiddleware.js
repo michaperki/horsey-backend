@@ -318,12 +318,16 @@ if (process.env.NODE_ENV === 'production' &&
           console.log('Preparing to push metrics with axios...');
           const metrics = await register.metrics();
           
+          // Log first part of metrics for debugging
+          console.log('Metrics sample:', metrics.substring(0, 200) + '...');
+          
+          // For Prometheus text format
           const response = await axios.post(
             process.env.GRAFANA_CLOUD_PROMETHEUS_URL,
             metrics,
             {
               headers: {
-                'Content-Type': register.contentType,
+                'Content-Type': 'text/plain', // Use text/plain for Prometheus text format
                 'Authorization': `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`
               }
             }
@@ -333,10 +337,17 @@ if (process.env.NODE_ENV === 'production' &&
           logger.info('Metrics pushed successfully with axios', { status: response.status });
         } catch (error) {
           console.error('Error pushing metrics with axios:', 
-            error.response ? error.response.status : error.message);
+            error.response ? `${error.response.status} - ${error.response.statusText}` : error.message);
+          
+          // Log more detailed error information
+          if (error.response && error.response.data) {
+            console.error('Error response data:', error.response.data);
+          }
+          
           logger.error('Error pushing metrics with axios', { 
             status: error.response?.status,
-            error: error.message
+            error: error.message,
+            data: error.response?.data
           });
         }
       };
