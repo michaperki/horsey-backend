@@ -1,14 +1,21 @@
+// config/index.js - Simplified version with backward compatibility
+
 const dotenv = require('dotenv');
 const path = require('path');
 const logger = require('../utils/logger');
 
-// Determine which .env file to use
+// Determine which .env file to use (keeping your original approach)
 const envFile = process.env.NODE_ENV === 'test'
   ? '.env.test'
   : (process.env.NODE_ENV === 'cypress' ? '.env.cypress' : '.env');
 
 // Load configuration from the appropriate .env file
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+// Log which environment file was loaded
+logger.info(`Loaded environment configuration from ${envFile}`, {
+  environment: process.env.NODE_ENV || 'default'
+});
 
 /**
  * Required environment variables for the application
@@ -37,7 +44,33 @@ const validateEnv = () => {
 };
 
 /**
- * Configuration object
+ * Get appropriate MongoDB URI based on environment
+ * First checks for environment-specific URI variables, falls back to MONGODB_URI
+ */
+const getMongoURI = () => {
+  // Check for environment-specific MongoDB URI
+  if (process.env.NODE_ENV === 'test' && process.env.MONGODB_URI_TEST) {
+    return process.env.MONGODB_URI_TEST;
+  }
+  
+  if (process.env.NODE_ENV === 'development' && process.env.MONGODB_URI_DEV) {
+    return process.env.MONGODB_URI_DEV;
+  }
+  
+  if (process.env.NODE_ENV === 'production' && process.env.MONGODB_URI_PROD) {
+    return process.env.MONGODB_URI_PROD;
+  }
+  
+  if (process.env.NODE_ENV === 'cypress' && process.env.MONGODB_URI_CYPRESS) {
+    return process.env.MONGODB_URI_CYPRESS;
+  }
+  
+  // Default fallback - this ensures backward compatibility
+  return process.env.MONGODB_URI;
+};
+
+/**
+ * Configuration object - closely matches your original 
  */
 const config = {
   env: process.env.NODE_ENV || 'development',
@@ -46,9 +79,7 @@ const config = {
     host: process.env.HOST || '0.0.0.0',
   },
   db: {
-    uri: process.env.NODE_ENV === 'test'
-      ? process.env.MONGODB_URI_TEST
-      : process.env.MONGODB_URI,
+    uri: getMongoURI(),
     options: {
       maxPoolSize: 50,
       minPoolSize: 10,
@@ -118,4 +149,3 @@ module.exports = {
   validateEnv,
   ...config,
 };
-

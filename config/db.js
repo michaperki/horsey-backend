@@ -1,4 +1,4 @@
-// config/db.js
+// config/db.js - Updated with better environment handling
 
 const mongoose = require('mongoose');
 const config = require('./index');
@@ -21,19 +21,30 @@ const setupMongooseMonitoring = () => {
   
   // Log all MongoDB events
   connection.on('connected', () => {
-    logger.info('MongoDB connected successfully');
+    logger.info('MongoDB connected successfully', {
+      environment: config.env, 
+      database: connection.name
+    });
   });
   
   connection.on('disconnected', () => {
-    logger.warn('MongoDB disconnected');
+    logger.warn('MongoDB disconnected', {
+      environment: config.env
+    });
   });
   
   connection.on('error', (err) => {
-    logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
+    logger.error('MongoDB connection error', { 
+      error: err.message, 
+      stack: err.stack,
+      environment: config.env
+    });
   });
   
   connection.on('reconnected', () => {
-    logger.info('MongoDB reconnected');
+    logger.info('MongoDB reconnected', {
+      environment: config.env
+    });
   });
   
   // Monitor Mongoose operations - could be extended further if needed
@@ -69,39 +80,28 @@ const setupMongooseMonitoring = () => {
   });
 };
 
-// Update in config/db.js
 const connectDB = async () => {
   try {
     // Setup monitoring before connecting
     setupMongooseMonitoring();
     
-    // Connect to MongoDB with enhanced logging and retries
-    logger.info('Connecting to MongoDB', { uri: config.db.uri });
-    
-    // Add connection retry logic
-    let retries = 5;
-    while (retries) {
-      try {
-        await mongoose.connect(config.db.uri, {
-          ...config.db.options,
-          serverSelectionTimeoutMS: 10000, // Increase timeout
-          connectTimeoutMS: 10000, // Increase connection timeout
-        });
-        break; // Successfully connected
-      } catch (error) {
-        retries--;
-        if (retries === 0) throw error; // Rethrow if out of retries
-        logger.warn(`MongoDB connection attempt failed, retrying... (${retries} attempts left)`, { 
-          error: error.message 
-        });
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
+    // Ensure we have a valid URI
+    if (!config.db.uri) {
+      throw new Error(`No MongoDB URI defined for environment: ${config.env}`);
     }
+    
+    // Connect to MongoDB with enhanced logging
+    logger.info('Connecting to MongoDB', { 
+      uri: config.db.uri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'), // Hide credentials in logs
+      environment: config.env
+    });
+    
+    await mongoose.connect(config.db.uri, config.db.options);
     
     logger.info('MongoDB connected successfully', { 
       host: mongoose.connection.host,
-      name: mongoose.connection.name 
+      name: mongoose.connection.name,
+      environment: config.env
     });
     
     // Get some basic MongoDB stats
@@ -112,40 +112,17 @@ const connectDB = async () => {
       avgObjSize: stats.avgObjSize,
       dataSize: `${(stats.dataSize / (1024 * 1024)).toFixed(2)} MB`,
       storageSize: `${(stats.storageSize / (1024 * 1024)).toFixed(2)} MB`,
+      environment: config.env
     });
     
   } catch (error) {
     logger.error('MongoDB connection error', { 
       error: error.message, 
-      stack: error.stack 
+      stack: error.stack,
+      environment: config.env
     });
     process.exit(1);
   }
 };
 
-// Add this function to handle MongoDB connection errors
-const setupMongooseConnectionHandlers = () => {
-  mongoose.connection.on('error', (err) => {
-    logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
-  });
-  
-  mongoose.connection.on('disconnected', () => {
-    logger.warn('MongoDB disconnected, attempting to reconnect');
-  });
-  
-  // Handle process termination
-  process.on('SIGINT', async () => {
-    try {
-      await mongoose.connection.close();
-      logger.info('MongoDB connection closed due to app termination');
-      process.exit(0);
-    } catch (err) {
-      logger.error('Error during MongoDB disconnection', { error: err.message });
-      process.exit(1);
-    }
-  });
-};
-
-// Call this function at the beginning of connectDB
-setupMongooseConnectionHandlers();
 module.exports = connectDB;
