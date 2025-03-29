@@ -110,8 +110,36 @@ app.use(session({
 // Monitoring routes - these should be excluded from rate limiting
 app.use('/health', healthRoutes);
 
-// Metrics endpoint - protected by authentication and admin authorization
+// Add these routes to handle Prometheus API compatibility
+app.post('/api/v1/query', (req, res) => {
+  // Simple compatibility endpoint for Grafana
+  res.json({
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": []
+    }
+  });
+});
+
+app.get('/api/v1/status/buildinfo', (req, res) => {
+  // Return a simple buildinfo response
+  res.json({
+    "status": "success",
+    "data": {
+      "version": "1.0.0",
+      "revision": "custom",
+      "branch": "main",
+      "buildUser": "horsey",
+      "buildDate": new Date().toISOString(),
+      "goVersion": "node-v18"
+    }
+  });
+});
+
+// Keep your existing metrics endpoint
 app.get('/metrics', metricsHandler);
+
 // Apply general API rate limiter to all routes
 app.use(apiLimiter);
 
