@@ -186,21 +186,18 @@ function makeRequest(url, options, data) {
 }
 
 /**
- * Converts Prometheus metrics to Protobuf format using Snappy compression
- * for Grafana Cloud compatibility
+ * Since we can't reliably implement the Prometheus remote_write protocol with Snappy compression
+ * directly in this middleware, we'll use a simpler approach - sending plain text metrics
+ * which is supported by some Grafana Cloud configurations.
  */
 async function prepareMetricsForGrafana() {
   try {
     // Get the metrics in the Prometheus text format
     const metrics = await register.metrics();
     
-    // Create a WriteRequest message as required by Prometheus remote_write API
-    // This is a simplified version - for production, proper Protobuf serialization should be used
-    const snappyCompressed = zlib.gzipSync(metrics);
-    
     return {
-      data: snappyCompressed,
-      contentType: 'application/x-protobuf'
+      data: metrics,
+      contentType: 'text/plain; version=0.0.4; charset=utf-8'
     };
   } catch (error) {
     console.error(`Error preparing metrics: ${error.message}`);
