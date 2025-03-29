@@ -1,5 +1,4 @@
 // backend/socket.js
-//
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
@@ -22,17 +21,28 @@ const broadcastStats = async (io) => {
 };
 
 const initializeSocket = (server) => {
+  // Get the allowed origins from config
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'https://horsey-chess.netlify.app',
+    'https://horsey-dd32bf69ae0e.herokuapp.com',
+  ];
+
+  // Log the allowed origins for debugging
+  logger.info(`Socket.io initializing with allowed origins:`, { allowedOrigins });
+
   const io = new Server(server, {
     cors: {
-      origin: [
-        'http://localhost:3000',
-        'http://localhost:5000',
-        'https://horsey-chess.netlify.app',
-        'https://horsey-dd32bf69ae0e.herokuapp.com',
-      ],
+      origin: allowedOrigins,
       methods: ['GET', 'POST'],
       credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization'],
     },
+    // Add transport options to ensure more reliable connections
+    transports: ['websocket', 'polling'],
+    // Increase ping timeout to handle slower connections
+    pingTimeout: 60000,
   });
 
   ioInstance = io;
@@ -40,7 +50,13 @@ const initializeSocket = (server) => {
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     const ip = socket.handshake.address;
-    logger.debug(`Socket.io connection attempt`, { ip, socketId: socket.id });
+    const origin = socket.handshake.headers.origin;
+    
+    logger.debug(`Socket.io connection attempt`, { 
+      ip, 
+      socketId: socket.id,
+      origin
+    });
 
     if (token) {
       try {
@@ -66,9 +82,11 @@ const initializeSocket = (server) => {
   });
 
   io.on('connection', async (socket) => {
+    const origin = socket.handshake.headers.origin;
     logger.info(`Socket connected`, { 
       userId: socket.user.id, 
-      socketId: socket.id 
+      socketId: socket.id,
+      origin
     });
     
     socket.join(socket.user.id);
@@ -198,4 +216,3 @@ const getIO = () => {
 };
 
 module.exports = { initializeSocket, getIO, broadcastStats };
-

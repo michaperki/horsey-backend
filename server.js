@@ -40,35 +40,50 @@ app.use(httpMetricsMiddleware);
 // Add simple HTTP request logging
 app.use(httpLogger);
 
-// Configure security headers with Helmet
-app.use(helmet());
-app.use(
-  helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-      connectSrc: ["'self'", "https://lichess.org"],
-      imgSrc: ["'self'", "data:", "https://lichess.org"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: [],
-    },
-  })
-);
+// Configure security headers with Helmet - but modify for Socket.io
+app.use(helmet({
+  // Disable contentSecurityPolicy for Socket.io to work properly
+  contentSecurityPolicy: false
+}));
 
-// CORS middleware
+// Define allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'https://horsey-chess.netlify.app',
+  'https://horsey-dd32bf69ae0e.herokuapp.com',
+  ...(process.env.ADDITIONAL_CORS_ORIGINS
+      ? process.env.ADDITIONAL_CORS_ORIGINS.split(',')
+      : []),
+];
+
+// Log allowed origins for debugging
+logger.info('Configured CORS with allowed origins:', { allowedOrigins });
+
+// CORS middleware with enhanced error handling and logging
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || config.cors.allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      logger.warn(`Blocked by CORS: Origin ${origin} is not allowed`, { origin });
-      callback(new Error('Not allowed by CORS'));
+    // Allow requests with no origin (like mobile apps, curl, etc)
+    if (!origin) {
+      logger.debug('Request with no origin allowed');
+      return callback(null, true);
     }
+    
+    if (allowedOrigins.includes(origin)) {
+      logger.debug(`Origin allowed by CORS: ${origin}`);
+      return callback(null, true);
+    } 
+    
+    logger.warn(`Blocked by CORS: Origin ${origin} is not allowed`);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Pre-flight requests handling for all routes
+app.options('*', cors());
 
 app.use(express.json());
 
@@ -144,4 +159,3 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 module.exports = app;
-

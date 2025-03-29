@@ -1,4 +1,4 @@
-// config/db.js
+// config/db.js - Updated with better environment handling
 
 const mongoose = require('mongoose');
 const config = require('./index');
@@ -21,19 +21,30 @@ const setupMongooseMonitoring = () => {
   
   // Log all MongoDB events
   connection.on('connected', () => {
-    logger.info('MongoDB connected successfully');
+    logger.info('MongoDB connected successfully', {
+      environment: config.env, 
+      database: connection.name
+    });
   });
   
   connection.on('disconnected', () => {
-    logger.warn('MongoDB disconnected');
+    logger.warn('MongoDB disconnected', {
+      environment: config.env
+    });
   });
   
   connection.on('error', (err) => {
-    logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
+    logger.error('MongoDB connection error', { 
+      error: err.message, 
+      stack: err.stack,
+      environment: config.env
+    });
   });
   
   connection.on('reconnected', () => {
-    logger.info('MongoDB reconnected');
+    logger.info('MongoDB reconnected', {
+      environment: config.env
+    });
   });
   
   // Monitor Mongoose operations - could be extended further if needed
@@ -74,14 +85,23 @@ const connectDB = async () => {
     // Setup monitoring before connecting
     setupMongooseMonitoring();
     
+    // Ensure we have a valid URI
+    if (!config.db.uri) {
+      throw new Error(`No MongoDB URI defined for environment: ${config.env}`);
+    }
+    
     // Connect to MongoDB with enhanced logging
-    logger.info('Connecting to MongoDB', { uri: config.db.uri });
+    logger.info('Connecting to MongoDB', { 
+      uri: config.db.uri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'), // Hide credentials in logs
+      environment: config.env
+    });
     
     await mongoose.connect(config.db.uri, config.db.options);
     
     logger.info('MongoDB connected successfully', { 
       host: mongoose.connection.host,
-      name: mongoose.connection.name 
+      name: mongoose.connection.name,
+      environment: config.env
     });
     
     // Get some basic MongoDB stats
@@ -92,12 +112,14 @@ const connectDB = async () => {
       avgObjSize: stats.avgObjSize,
       dataSize: `${(stats.dataSize / (1024 * 1024)).toFixed(2)} MB`,
       storageSize: `${(stats.storageSize / (1024 * 1024)).toFixed(2)} MB`,
+      environment: config.env
     });
     
   } catch (error) {
     logger.error('MongoDB connection error', { 
       error: error.message, 
-      stack: error.stack 
+      stack: error.stack,
+      environment: config.env
     });
     process.exit(1);
   }
