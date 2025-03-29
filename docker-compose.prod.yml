@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  app:
+    image: ${DOCKERHUB_USERNAME}/horsey-backend:latest
+    container_name: horsey-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/horsey
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - LICHESS_CLIENT_ID=${LICHESS_CLIENT_ID}
+      - LICHESS_CLIENT_SECRET=${LICHESS_CLIENT_SECRET}
+      - LICHESS_REDIRECT_URI=${LICHESS_REDIRECT_URI}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - INITIAL_ADMIN_USERNAME=${INITIAL_ADMIN_USERNAME}
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD}
+      - FRONTEND_URL=${FRONTEND_URL}
+    volumes:
+      - ./logs:/usr/src/app/logs
+    depends_on:
+      - mongodb
+    networks:
+      - horsey-network
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - horsey-network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_APP_USERNAME=${MONGO_APP_USERNAME}
+      - MONGO_APP_PASSWORD=${MONGO_APP_PASSWORD}
+    command: [--auth]
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+networks:
+  horsey-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

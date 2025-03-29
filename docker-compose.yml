@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    image: horsey-backend
+    container_name: horsey-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/horsey
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - LICHESS_CLIENT_ID=${LICHESS_CLIENT_ID}
+      - LICHESS_CLIENT_SECRET=${LICHESS_CLIENT_SECRET}
+      - LICHESS_REDIRECT_URI=${LICHESS_REDIRECT_URI}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - INITIAL_ADMIN_USERNAME=${INITIAL_ADMIN_USERNAME}
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD}
+      - FRONTEND_URL=${FRONTEND_URL}
+    volumes:
+      - ./logs:/usr/src/app/logs
+    depends_on:
+      - mongodb
+    networks:
+      - horsey-network
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - horsey-network
+
+networks:
+  horsey-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
