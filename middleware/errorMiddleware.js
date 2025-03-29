@@ -1,17 +1,17 @@
 // backend/middleware/errorMiddleware.js
 const { AppError } = require('../utils/errorTypes');
-const logger = console; // Replace with your logger implementation
+const logger = require('../utils/logger'); // Use structured logger
 
 /**
  * Central error handling middleware
  */
 const errorHandler = (err, req, res, next) => {
-  // Log error
+  // Log error with structured logging
   logger.error(`${err.name}: ${err.message}`, {
     stack: err.stack,
     path: req.path,
     method: req.method,
-    requestId: req.id, // Assuming you add a request ID in a previous middleware
+    requestId: req.id, // Assuming a request ID is added in earlier middleware
     userId: req.user?.id || 'unauthenticated',
   });
 
@@ -85,3 +85,4 @@ module.exports = {
   asyncHandler,
   notFoundHandler
 };
+

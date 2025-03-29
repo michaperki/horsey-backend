@@ -1,8 +1,8 @@
 // backend/services/notificationService.js
-
 const Notification = require('../models/Notification');
 const { getIO } = require('../socket');
 const { DatabaseError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * Creates a new notification and emits it via Socket.io
@@ -11,7 +11,7 @@ const { DatabaseError } = require('../utils/errorTypes');
  * @param {String} type - Type of notification
  */
 const sendNotification = async (userId, message, type) => {
-  console.log("sending notification");
+  logger.info('Sending notification', { userId, message, type });
   try {
     // Create a new notification in the database
     const notification = await Notification.create({
@@ -29,10 +29,10 @@ const sendNotification = async (userId, message, type) => {
       type: notification.type,
       createdAt: notification.createdAt,
     });
-    
+
     return notification;
   } catch (error) {
-    console.error(`Error sending notification to user ${userId}:`, error.message);
+    logger.error(`Error sending notification to user ${userId}`, { error: error.message, stack: error.stack });
     throw new DatabaseError(`Failed to create notification: ${error.message}`);
   }
 };
@@ -50,14 +50,14 @@ const markNotificationAsRead = async (notificationId, userId) => {
       { read: true },
       { new: true }
     );
-    
+
     if (!notification) {
       throw new Error('Notification not found or does not belong to user');
     }
-    
+
     return notification;
   } catch (error) {
-    console.error(`Error marking notification ${notificationId} as read:`, error.message);
+    logger.error(`Error marking notification ${notificationId} as read`, { error: error.message, stack: error.stack });
     throw new DatabaseError(`Failed to mark notification as read: ${error.message}`);
   }
 };
@@ -73,10 +73,10 @@ const markAllNotificationsAsRead = async (userId) => {
       { userId, read: false },
       { read: true }
     );
-    
+
     return { modifiedCount: result.nModified || 0 };
   } catch (error) {
-    console.error(`Error marking all notifications as read for user ${userId}:`, error.message);
+    logger.error(`Error marking all notifications as read for user ${userId}`, { error: error.message, stack: error.stack });
     throw new DatabaseError(`Failed to mark all notifications as read: ${error.message}`);
   }
 };
@@ -89,22 +89,22 @@ const markAllNotificationsAsRead = async (userId) => {
  */
 const getUserNotifications = async (userId, options = {}) => {
   const { page = 1, limit = 20, read } = options;
-  
+
   try {
     const filter = { userId };
-    
+
     if (read === true || read === false) {
       filter.read = read;
     }
-    
+
     const notifications = await Notification.find(filter)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit, 10));
-      
+
     const total = await Notification.countDocuments(filter);
     const totalPages = Math.ceil(total / limit);
-    
+
     return {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
@@ -113,7 +113,7 @@ const getUserNotifications = async (userId, options = {}) => {
       notifications,
     };
   } catch (error) {
-    console.error(`Error fetching notifications for user ${userId}:`, error.message);
+    logger.error(`Error fetching notifications for user ${userId}`, { error: error.message, stack: error.stack });
     throw new DatabaseError(`Failed to fetch notifications: ${error.message}`);
   }
 };

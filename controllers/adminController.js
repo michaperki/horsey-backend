@@ -1,5 +1,4 @@
-
-// backend/controllers/adminController.js
+const logger = require('../utils/logger');
 
 /**
  * Placeholder controller for admin operations.
@@ -7,19 +6,21 @@
  */
 const adminActionExample = async (req, res) => {
   const { someParameter } = req.body;
+  logger.info('Admin action initiated', { someParameter });
 
   // Input validation
   if (!someParameter) {
+    logger.warn('Admin action missing required parameter', { someParameter });
     return res.status(400).json({ error: 'Parameter is required' });
   }
 
   try {
     // Example business logic
     const result = await performAdminTask(someParameter); // Replace with actual logic
-
+    logger.info('Admin task completed successfully', { result });
     res.status(200).json({ message: 'Admin task completed successfully', result });
   } catch (error) {
-    console.error('Error in adminActionExample controller:', error);
+    logger.error('Error in adminActionExample controller', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Server error during admin task execution' });
   }
 };

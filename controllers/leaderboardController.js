@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Bet = require('../models/Bet');
 const { asyncHandler } = require('../middleware/errorMiddleware');
 const { DatabaseError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * GET /leaderboard
@@ -12,6 +13,7 @@ const { DatabaseError } = require('../utils/errorTypes');
  */
 const getLeaderboard = asyncHandler(async (req, res) => {
   try {
+    logger.info('Fetching leaderboard data');
     // Define the rating fields to consider
     const ratingFields = ['lichessRatings.bullet', 'lichessRatings.blitz', 'lichessRatings.rapid', 'lichessRatings.classical'];
 
@@ -21,7 +23,6 @@ const getLeaderboard = asyncHandler(async (req, res) => {
         // Project necessary fields and calculate the average rating
         $project: {
           username: 1,
-          // Calculate average rating from available rating types
           averageRating: {
             $avg: [
               '$lichessRatings.bullet',
@@ -122,11 +123,13 @@ const getLeaderboard = asyncHandler(async (req, res) => {
       },
     ]);
 
+    logger.info('Leaderboard data fetched successfully', { count: leaderboard.length });
     res.json(leaderboard);
   } catch (error) {
-    console.error('Error fetching leaderboard:', error.message);
+    logger.error('Error fetching leaderboard', { error: error.message, stack: error.stack });
     throw new DatabaseError('Failed to fetch leaderboard data');
   }
 });
 
 module.exports = { getLeaderboard };
+

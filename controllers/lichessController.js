@@ -15,6 +15,7 @@ const {
   ExternalServiceError,
   AuthenticationError
 } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 // In-memory store for OAuth data. For production, use a persistent store like Redis.
 const oauthStore = new Map();
@@ -49,9 +50,10 @@ const generateCodeChallenge = (codeVerifier) => {
 const initiateLichessOAuth = asyncHandler(async (req, res) => {
   const { LICHESS_CLIENT_ID, LICHESS_REDIRECT_URI, LICHESS_SCOPES } = process.env;
 
-  // Log the client ID and redirect URI
-  console.log('LICHESS_CLIENT_ID:', LICHESS_CLIENT_ID);
-  console.log('LICHESS_REDIRECT_URI:', LICHESS_REDIRECT_URI);
+  logger.info('Initiating Lichess OAuth', {
+    LICHESS_CLIENT_ID,
+    LICHESS_REDIRECT_URI
+  });
 
   if (!LICHESS_CLIENT_ID || !LICHESS_REDIRECT_URI) {
     throw new ValidationError('Lichess OAuth configuration is missing.');
@@ -78,7 +80,7 @@ const initiateLichessOAuth = asyncHandler(async (req, res) => {
     code_challenge_method: 'S256',
   })}`;
 
-  // Send the authorization URL as JSON
+  logger.info('OAuth authorization URL generated', { state, authorizationUrl });
   res.status(200).json({ redirectUrl: authorizationUrl });
 });
 
@@ -117,20 +119,16 @@ const mapPerfsToRatings = (perfs) => {
   // Iterate over each perf in perfs
   for (const [key, value] of Object.entries(perfs)) {
     if (!value || typeof value.rating !== 'number') {
-      // Skip entries without a valid rating
       continue;
     }
 
     if (standardTimeControls.includes(key)) {
-      // Handle standard time controls
       ratings.standard[key] = value.rating;
     } else if (recognizedVariants.includes(key)) {
-      // Handle variants with overall ratings
       ratings.variants[key] = value.rating;
     } else {
-      // Handle unexpected variants or formats
-      console.warn(`Unexpected perf key: ${key}. Skipping.`);
-      continue; // Skip unexpected entries
+      logger.warn('Unexpected perf key encountered', { key });
+      continue;
     }
   }
 
@@ -141,10 +139,8 @@ const mapPerfsToRatings = (perfs) => {
  * Handles the OAuth callback from Lichess, exchanges the code for tokens, and stores user data.
  */
 const handleLichessCallback = asyncHandler(async (req, res) => {
-  console.log(req.query);
+  logger.info('Received Lichess OAuth callback', { query: req.query });
   const { code, state } = req.query;
-
-  console.log('Received OAuth callback with code:', code, 'and state:', state);
 
   if (!code || !state) {
     throw new ValidationError('Missing code or state parameter.');
@@ -157,8 +153,8 @@ const handleLichessCallback = asyncHandler(async (req, res) => {
   }
 
   const { userId, codeVerifier, createdAt } = oauthData;
-
   const STATE_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes
+
   if (Date.now() - createdAt > STATE_EXPIRATION_TIME) {
     oauthStore.delete(state);
     throw new AuthenticationError('State parameter has expired.');
@@ -171,7 +167,7 @@ const handleLichessCallback = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Exchange authorization code for tokens
+    logger.info('Exchanging code for tokens', { userId, state });
     const tokenResponse = await axios.post(
       'https://lichess.org/api/token',
       qs.stringify({
@@ -190,8 +186,8 @@ const handleLichessCallback = asyncHandler(async (req, res) => {
     );
 
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
+    logger.info('Token exchange successful', { userId, expires_in });
 
-    // Fetch user profile from Lichess
     const profileResponse = await axios.get('https://lichess.org/api/account', {
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -199,42 +195,32 @@ const handleLichessCallback = asyncHandler(async (req, res) => {
     });
 
     const { id, username, perfs } = profileResponse.data;
+    logger.info('Fetched Lichess account data', { lichessUsername: username });
 
-    // Log the entire perfs object for debugging
-    console.log(`Fetched perfs for user ${username}:`, JSON.stringify(perfs, null, 2));
-
+    logger.debug('Lichess perfs received', { perfs });
     const extractedRatings = mapPerfsToRatings(perfs);
+    logger.debug('Extracted ratings', { lichessUsername: username, extractedRatings });
 
-    // Log the extracted ratings for verification
-    console.log(`Extracted Ratings for user ${username}:`, JSON.stringify(extractedRatings, null, 2));
     const { ratingClass, karma } = calculateRatingClassAndKarma(perfs);
 
-    // Update the user's Lichess information in the database
     await User.findByIdAndUpdate(userId, {
       lichessId: id,
       lichessUsername: username,
       lichessAccessToken: access_token,
       lichessRefreshToken: refresh_token,
-      lichessConnectedAt: new Date(), // Set the connection timestamp
-      lichessRatings: extractedRatings, // Assign mapped ratings
-      ratingClass,  // from service
-      karma,        // from service
+      lichessConnectedAt: new Date(),
+      lichessRatings: extractedRatings,
+      ratingClass,
+      karma,
     });
 
-    // Clear the OAuth data from the store
     oauthStore.delete(state);
+    logger.info('Lichess account connected', { userId, lichessUsername: username });
 
-    console.log(`User ${userId} connected Lichess account: ${username}`);
-
-    // Redirect back to frontend with success query parameter
     res.redirect(`${process.env.FRONTEND_URL}/profile?lichess=connected`);
   } catch (error) {
-    // Clear the OAuth data from the store in case of error
     oauthStore.delete(state);
-
-    console.error('Error during Lichess OAuth callback:', error.response?.data || error.message);
-    
-    // Instead of redirecting with an error, we'll throw it to be handled by the error middleware
+    logger.error('Error during Lichess OAuth callback', { error: error.response?.data || error.message });
     throw new ExternalServiceError('Lichess', 'Failed to complete Lichess OAuth: ' + (error.response?.data || error.message));
   }
 });
@@ -244,10 +230,10 @@ const handleLichessCallback = asyncHandler(async (req, res) => {
  */
 const getLichessStatus = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  // Explicitly select lichessAccessToken
   const user = await User.findById(userId).select('+lichessAccessToken');
 
   if (!user) {
+    logger.warn('User not found when fetching Lichess status', { userId });
     return res.status(200).json({
       username: null,
       ratings: {},
@@ -257,6 +243,7 @@ const getLichessStatus = asyncHandler(async (req, res) => {
   }
 
   const isConnected = !!user.lichessId && !!user.lichessAccessToken;
+  logger.info('Lichess status fetched', { userId, connected: isConnected });
 
   res.status(200).json({
     connected: isConnected,
@@ -269,25 +256,24 @@ const getLichessStatus = asyncHandler(async (req, res) => {
  * Fetches the connected Lichess user information with enhanced error handling.
  */
 const getLichessUser = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // Get the authenticated user's ID
+  const userId = req.user.id;
   const user = await User.findById(userId);
 
   if (!user) {
+    logger.warn('User not found when fetching Lichess user info', { userId });
     throw new ResourceNotFoundError('User');
   }
 
   if (!user.lichessId) {
+    logger.warn('Lichess account not connected', { userId });
     throw new ResourceNotFoundError('Lichess account not connected');
   }
 
-  // Ensure ratings object exists and handle missing ratings gracefully
   const lichessRatings = user.lichessRatings || {};
-
-  // Prepare standard ratings
   const standardRatings = lichessRatings.standard || {};
-
-  // Prepare variant ratings
   const variantRatings = lichessRatings.variants || {};
+
+  logger.info('Returning Lichess user info', { userId, lichessUsername: user.lichessUsername });
 
   res.status(200).json({
     username: user.lichessUsername || 'N/A',
@@ -309,10 +295,9 @@ const getLichessUser = asyncHandler(async (req, res) => {
         horde: variantRatings.horde || 'N/A',
         racingKings: variantRatings.racingKings || 'N/A',
         crazyhouse: variantRatings.crazyhouse || 'N/A',
-        // Add other variants as needed
       },
-    }, // Include all ratings with variants
-    connectedAt: user.lichessConnectedAt || null, // Provide connection timestamp if available
+    },
+    connectedAt: user.lichessConnectedAt || null,
   });
 });
 
@@ -324,14 +309,15 @@ const disconnectLichessAccountHandler = asyncHandler(async (req, res) => {
   const user = await User.findById(userId);
 
   if (!user) {
+    logger.warn('User not found when disconnecting Lichess account', { userId });
     throw new ResourceNotFoundError('User');
   }
 
   if (!user.lichessId) {
+    logger.warn('Lichess account already disconnected', { userId });
     throw new ValidationError('Lichess account is not connected');
   }
 
-  // Clear Lichess-related fields
   user.lichessId = null;
   user.lichessUsername = null;
   user.lichessAccessToken = null;
@@ -343,18 +329,16 @@ const disconnectLichessAccountHandler = asyncHandler(async (req, res) => {
   };
 
   await user.save();
-
-  console.log(`User ${userId} disconnected their Lichess account.`);
+  logger.info('User disconnected their Lichess account', { userId });
 
   res.status(200).json({ message: 'Lichess account disconnected successfully.' });
 });
 
-
 module.exports = {
-  // Removed validateResultHandler as tokenService is deprecated
   initiateLichessOAuth,
   handleLichessCallback,
   getLichessStatus,
   getLichessUser,
   disconnectLichessAccountHandler
 };
+

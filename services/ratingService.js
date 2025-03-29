@@ -1,5 +1,6 @@
 // services/ratingService.js
 const { ValidationError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * Calculates the highest standard rating and total games played.
@@ -8,7 +9,7 @@ const { ValidationError } = require('../utils/errorTypes');
  * @returns {Object} - Object containing ratingClass and karma values
  */
 function calculateRatingClassAndKarma(perfs) {
-  console.log('Starting rating calculation with input performance data:', perfs);
+  logger.info('Starting rating calculation', { perfs });
 
   // Validate input
   if (!perfs || typeof perfs !== 'object') {
@@ -22,7 +23,7 @@ function calculateRatingClassAndKarma(perfs) {
   for (const control of standardControls) {
     const perf = perfs[control];
     if (perf && typeof perf.rating === 'number') {
-      console.log(`Processing ${control}: rating=${perf.rating}, games=${perf.games || 0}`);
+      logger.info(`Processing ${control}`, { rating: perf.rating, games: perf.games || 0 });
       highestRating = Math.max(highestRating, perf.rating);
       if (perf.games) {
         totalGames += perf.games;
@@ -30,8 +31,7 @@ function calculateRatingClassAndKarma(perfs) {
     }
   }
 
-  console.log(`Highest rating found: ${highestRating}`);
-  console.log(`Total games played: ${totalGames}`);
+  logger.info('Rating calculation intermediate results', { highestRating, totalGames });
 
   let ratingClass = 'Beginner';
   if (highestRating < 1200) {
@@ -44,13 +44,12 @@ function calculateRatingClassAndKarma(perfs) {
     ratingClass = 'Expert';
   }
 
-  console.log(`Assigned rating class: ${ratingClass}`);
+  logger.info('Assigned rating class', { ratingClass });
 
   // Here we assign karma directly as total games (or adjust as needed)
   const karma = totalGames;
 
-  console.log('Finished rating calculation:', { ratingClass, karma });
-
+  logger.info('Finished rating calculation', { ratingClass, karma });
   return { ratingClass, karma };
 }
 
@@ -108,11 +107,14 @@ function estimateSkillLevel({ gamesPlayed, winRate, timeControl }) {
     ratingClass = 'Expert';
   }
   
-  return {
+  const result = {
     ratingClass,
     estimatedRating: Math.round(estimatedRating),
     confidence: Math.min(100, (experienceFactor / 2) + 50) // Higher with more games
   };
+
+  logger.info('Estimated skill level', result);
+  return result;
 }
 
 module.exports = { calculateRatingClassAndKarma, estimateSkillLevel };

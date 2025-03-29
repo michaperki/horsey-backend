@@ -4,6 +4,7 @@ const Bet = require('../models/Bet');
 const User = require('../models/User');
 const { DatabaseError } = require('../utils/errorTypes');
 const { sendNotification } = require('../services/notificationService');
+const logger = require('../utils/logger');
 
 /**
  * Finds and processes expired bets
@@ -21,8 +22,8 @@ async function processExpiredBets() {
       return { expired: 0, errors: 0 };
     }
 
-    console.log(`Found ${expiredBets.length} expired bets to process`);
-    
+    logger.info(`Found ${expiredBets.length} expired bets to process`);
+
     const results = {
       expired: 0,
       errors: 0,
@@ -38,26 +39,26 @@ async function processExpiredBets() {
         if (bet.creatorId) {
           const creator = await User.findById(bet.creatorId);
           if (creator) {
-            // Determine which balance to restore
             if (bet.currencyType === 'sweepstakes') {
               creator.sweepstakesBalance += bet.amount;
             } else {
               creator.tokenBalance += bet.amount;
             }
             await creator.save();
-            
+
             // Send notification to the user
             await sendNotification(
               creator._id,
               `Your bet of ${bet.amount} ${bet.currencyType}s has expired and been refunded.`,
               'betExpired'
             );
+            logger.info('Refunded expired bet', { betId: bet._id, userId: creator._id });
           }
         }
-        
+
         results.expired++;
       } catch (error) {
-        console.error(`Error processing expired bet ${bet._id}:`, error);
+        logger.error(`Error processing expired bet ${bet._id}: ${error.message}`, { betId: bet._id, error: error.stack });
         results.errors++;
         results.errorDetails.push({
           betId: bet._id,
@@ -67,12 +68,12 @@ async function processExpiredBets() {
     }
 
     if (results.expired > 0) {
-      console.log(`Expired ${results.expired} bets successfully, with ${results.errors} errors`);
+      logger.info(`Expired ${results.expired} bets successfully, with ${results.errors} errors`);
     }
-    
+
     return results;
   } catch (error) {
-    console.error('Error in processExpiredBets:', error);
+    logger.error('Error in processExpiredBets', { error: error.message, stack: error.stack });
     throw new DatabaseError(`Failed to process expired bets: ${error.message}`);
   }
 }
@@ -82,7 +83,7 @@ async function processExpiredBets() {
  */
 function startExpiringBets() {
   if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'cypress') {
-    console.log('Bet expiration cron job skipped in test/cypress environment.');
+    logger.info('Bet expiration cron job skipped in test/cypress environment.');
     return;
   }
   
@@ -90,20 +91,19 @@ function startExpiringBets() {
   cron.schedule('*/1 * * * *', async () => {
     try {
       const results = await processExpiredBets();
-      
-      // Only log if we actually expired some bets
       if (results.expired > 0 || results.errors > 0) {
-        console.log(`Bet expiration results: ${results.expired} expired, ${results.errors} errors`);
+        logger.info(`Bet expiration results: ${results.expired} expired, ${results.errors} errors`);
       }
     } catch (error) {
-      console.error('Error in bet expiration cron job:', error);
+      logger.error('Error in bet expiration cron job', { error: error.message, stack: error.stack });
     }
   });
   
-  console.log('Bet expiration service started. Results will be logged when bets are processed.');
+  logger.info('Bet expiration service started. Results will be logged when bets are processed.');
 }
 
 module.exports = { 
   startExpiringBets,
   processExpiredBets
 };
+

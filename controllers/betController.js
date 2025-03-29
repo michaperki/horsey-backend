@@ -1,12 +1,12 @@
 // backend/controllers/betController.js - Updated with error handling
 
 const mongoose = require('mongoose');
-const axios = require('axios');
 const Bet = require('../models/Bet');
 const User = require('../models/User');
 const { getGameOutcome, createLichessGame, getUsernameFromAccessToken } = require('../services/lichessService');
 const { asyncHandler } = require('../middleware/errorMiddleware');
 const { ResourceNotFoundError, ValidationError, AuthorizationError, ExternalServiceError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * Helper function to check if a given game is open for betting.
@@ -14,6 +14,7 @@ const { ResourceNotFoundError, ValidationError, AuthorizationError, ExternalServ
 const isGameOpenForBetting = async (gameId) => {
   const gameResult = await getGameOutcome(gameId);
   if (!gameResult.success) {
+    logger.error('Error retrieving game outcome', { gameId, error: gameResult.error });
     throw new ExternalServiceError('Lichess', gameResult.error);
   }
   // Betting is open if the game status is 'created' or 'started'
@@ -26,9 +27,8 @@ const isGameOpenForBetting = async (gameId) => {
  */
 const getBetHistory = asyncHandler(async (req, res) => {
   const userId = req.user.id;
+  logger.info('Fetching bet history', { userId });
 
-  console.log("Fetching bet history for:", userId);
-  // Existing pagination & sorting
   const { 
     page = 1, 
     limit = 10, 
@@ -77,6 +77,7 @@ const getBetHistory = asyncHandler(async (req, res) => {
 
   const validSortFields = ['createdAt', 'amount', 'gameId', 'status'];
   if (!validSortFields.includes(sortBy)) {
+    logger.warn('Invalid sort field', { sortBy, validSortFields });
     throw new ValidationError(`Invalid sort field. Valid fields are: ${validSortFields.join(', ')}`);
   }
 
@@ -92,6 +93,8 @@ const getBetHistory = asyncHandler(async (req, res) => {
   const totalBets = await Bet.countDocuments(filter);
   const totalPages = Math.ceil(totalBets / limit);
 
+  logger.info('Bet history fetched', { userId, totalBets });
+
   res.json({
     page: parseInt(page, 10),
     limit: parseInt(limit, 10),
@@ -103,7 +106,6 @@ const getBetHistory = asyncHandler(async (req, res) => {
 
 /**
  * Maps timeControl to ratingCategory based on predefined rules.
- * Adjust the thresholds as per your application's requirements.
  */
 const mapTimeControlToRatingCategory = (minutes) => {
   if (minutes <= 3) {
@@ -117,18 +119,20 @@ const mapTimeControlToRatingCategory = (minutes) => {
   }
 };
 
+/**
+ * Retrieves available bet seekers.
+ */
 const getAvailableSeekers = asyncHandler(async (req, res) => {
   const { currencyType } = req.query; 
-  
-  // Get current user's rating class
+  logger.info('Fetching available seekers', { currencyType, userId: req.user.id });
+
   const currentUser = await User.findById(req.user.id).select('ratingClass');
   if (!currentUser) {
+    logger.error('User not found for available seekers', { userId: req.user.id });
     throw new ResourceNotFoundError('User');
   }
   
   const filter = { status: 'pending', ratingClass: currentUser.ratingClass };
-
-  // Add currencyType filter if provided
   if (currencyType) {
     filter.currencyType = currencyType;
   }
@@ -142,34 +146,15 @@ const getAvailableSeekers = asyncHandler(async (req, res) => {
 
     const [minutesStr, incrementStr] = timeControl.split('|');
     const minutes = parseInt(minutesStr, 10);
-    const increment = parseInt(incrementStr, 10);
 
-    if (isNaN(minutes) || isNaN(increment)) {
-      return {
-        id: bet._id,
-        creator: bet.creatorId.username,
-        creatorLichessUsername: bet.creatorId.lichessUsername,
-        tokenBalance: bet.creatorId.tokenBalance,
-        sweepstakesBalance: bet.creatorId.sweepstakesBalance,
-        rating: null,
-        colorPreference: bet.creatorColor,
-        timeControl: bet.timeControl,
-        variant: bet.variant,
-        currencyType,
-        wager: bet.amount,
-        players: 2,
-        createdAt: bet.createdAt,
-        creatorRatings: bet.creatorId.lichessRatings,
-      };
-    }
-
-    const ratingCategory = mapTimeControlToRatingCategory(minutes);
     let relevantRating = null;
-
-    if (variant.toLowerCase() === 'standard') {
-      relevantRating = ratings['standard']?.[ratingCategory] || null;
-    } else {
-      relevantRating = ratings[variant.toLowerCase()]?.overall || null;
+    if (!isNaN(minutes)) {
+      const ratingCategory = mapTimeControlToRatingCategory(minutes);
+      if (variant.toLowerCase() === 'standard') {
+        relevantRating = ratings['standard']?.[ratingCategory] || null;
+      } else {
+        relevantRating = ratings[variant.toLowerCase()]?.overall || null;
+      }
     }
 
     return {
@@ -190,16 +175,18 @@ const getAvailableSeekers = asyncHandler(async (req, res) => {
     };
   });
 
+  logger.info('Available seekers fetched', { count: seekers.length });
   res.json({ seekers });
 });
 
 /**
  * Places a new bet with an expiration time (e.g., 30 minutes).
- * If a gameId is provided, it checks if betting is open for that game.
  */
 const placeBet = asyncHandler(async (req, res) => {
-  const { colorPreference, amount, timeControl, variant, currencyType, gameId } = req.body;
+  const { colorPreference, amount, timeControl, variant, currencyType } = req.body;
   const creatorId = req.user.id;
+
+  logger.info('Placing new bet', { userId: creatorId, colorPreference, amount, timeControl, variant, currencyType });
 
   // Basic validations
   const validVariants = ['standard', 'crazyhouse', 'chess960'];
@@ -225,16 +212,9 @@ const placeBet = asyncHandler(async (req, res) => {
     throw new ValidationError('timeControl must be in the format "minutes|increment"');
   }
 
-  // If a gameId is provided, ensure betting is open for that game.
-  if (gameId) {
-    const open = await isGameOpenForBetting(gameId);
-    if (!open) {
-      throw new ValidationError('Betting is closed for this game');
-    }
-  }
-
   const user = await User.findById(creatorId);
   if (!user) {
+    logger.error('User not found when placing bet', { userId: creatorId });
     throw new ResourceNotFoundError('User');
   }
 
@@ -247,6 +227,7 @@ const placeBet = asyncHandler(async (req, res) => {
   }
 
   if (currentBalance < amount) {
+    logger.warn('Insufficient balance when placing bet', { userId: creatorId, required: amount, available: currentBalance, currencyType });
     throw new ValidationError(`Insufficient ${currencyType} balance`);
   }
 
@@ -268,9 +249,16 @@ const placeBet = asyncHandler(async (req, res) => {
     variant,
     status: 'pending',
     expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-    gameId: gameId || null, // optionally store the gameId if provided
   });
   await newBet.save();
+
+  logger.betEvent('created', newBet._id, creatorId, {
+    amount,
+    currencyType,
+    timeControl,
+    variant,
+    status: 'pending'
+  });
 
   // Optional socket event
   const io = req.app.get('io');
@@ -297,6 +285,8 @@ const acceptBet = asyncHandler(async (req, res) => {
   const { betId } = req.params;
   const opponentId = req.user.id;
 
+  logger.info('Accepting bet', { betId, userId: opponentId });
+
   if (!mongoose.Types.ObjectId.isValid(betId)) {
     throw new ValidationError('Invalid bet ID');
   }
@@ -308,10 +298,12 @@ const acceptBet = asyncHandler(async (req, res) => {
   ).populate('creatorId');
 
   if (!bet) {
+    logger.warn('Bet not available for acceptance', { betId, userId: opponentId });
     throw new ResourceNotFoundError('Bet is no longer available or does not exist');
   }
 
   if (opponentId.toString() === bet.creatorId._id.toString()) {
+    logger.warn('User attempted to accept their own bet', { betId, userId: opponentId, creatorId: bet.creatorId._id.toString() });
     await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
     throw new ValidationError('You cannot accept your own bet.');
   }
@@ -327,6 +319,7 @@ const acceptBet = asyncHandler(async (req, res) => {
     : opponent.tokenBalance;
 
   if (opponentCurrentBalance < bet.amount) {
+    logger.warn('Insufficient balance to accept bet', { betId, userId: opponentId, required: bet.amount, available: opponentCurrentBalance, currencyType: bet.currencyType });
     await Bet.findByIdAndUpdate(betId, { opponentId: null, status: 'pending' });
     throw new ValidationError(`Insufficient ${bet.currencyType} balance to accept this bet`);
   }
@@ -352,13 +345,29 @@ const acceptBet = asyncHandler(async (req, res) => {
     finalBlackId = bet.creatorColor === 'black' ? bet.creatorId._id : opponentId;
   }
 
+  logger.debug('Color assignment for bet', { 
+    betId, 
+    creatorId: bet.creatorId._id.toString(),
+    opponentId,
+    finalWhiteId: finalWhiteId.toString(),
+    finalBlackId: finalBlackId.toString(),
+    creatorColor: bet.creatorColor
+  });
+
   const [whiteUser, blackUser] = await Promise.all([
     User.findById(finalWhiteId).select('+lichessAccessToken username _id'),
     User.findById(finalBlackId).select('+lichessAccessToken username _id'),
   ]);
 
   if (!whiteUser.lichessAccessToken || !blackUser.lichessAccessToken) {
-    console.error('Missing Lichess OAuth tokens.');
+    logger.error('Missing Lichess OAuth tokens', {
+      betId,
+      whiteUserId: finalWhiteId.toString(),
+      blackUserId: finalBlackId.toString(),
+      whiteHasToken: !!whiteUser.lichessAccessToken,
+      blackHasToken: !!blackUser.lichessAccessToken
+    });
+    
     if (bet.currencyType === 'sweepstakes') {
       opponent.sweepstakesBalance += bet.amount;
     } else {
@@ -372,6 +381,14 @@ const acceptBet = asyncHandler(async (req, res) => {
   }
 
   try {
+    logger.info('Creating Lichess game', { 
+      betId,
+      timeControl: bet.timeControl,
+      variant: bet.variant,
+      whiteUsername: whiteUser.username,
+      blackUsername: blackUser.username
+    });
+    
     const lichessResponse = await createLichessGame(
       bet.timeControl,
       bet.variant,
@@ -381,6 +398,8 @@ const acceptBet = asyncHandler(async (req, res) => {
     );
 
     if (!lichessResponse.success) {
+      logger.error('Failed to create Lichess game', { betId, error: lichessResponse.error });
+      
       if (bet.currencyType === 'sweepstakes') {
         opponent.sweepstakesBalance += bet.amount;
       } else {
@@ -399,6 +418,13 @@ const acceptBet = asyncHandler(async (req, res) => {
     bet.gameLink = lichessResponse.gameLink;
     bet.status = 'matched';
     await bet.save();
+
+    logger.betEvent('accepted', bet._id, opponentId, {
+      gameId: lichessResponse.gameId,
+      gameLink: lichessResponse.gameLink,
+      status: 'matched',
+      creatorId: bet.creatorId._id.toString()
+    });
 
     const io = req.app.get('io');
     io.to(bet.creatorId._id.toString()).emit('betAccepted', {
@@ -420,24 +446,27 @@ const acceptBet = asyncHandler(async (req, res) => {
       gameLink: lichessResponse.gameLink,
     });
   } catch (error) {
-    // If the error is already an AppError, it will be caught by the errorHandler middleware
     if (error.isOperational) {
       throw error;
     }
-    // Otherwise, wrap in an ExternalServiceError
+    logger.error('Error in acceptBet', { betId, errorMessage: error.message, stack: error.stack });
     throw new ExternalServiceError('Lichess', error.message);
   }
 });
 
+/**
+ * Cancels a pending bet and restores the user's balance.
+ */
 const cancelBet = asyncHandler(async (req, res) => {
   const { betId } = req.params;
   const userId = req.user.id;
+
+  logger.info('Canceling bet', { betId, userId });
 
   if (!mongoose.Types.ObjectId.isValid(betId)) {
     throw new ValidationError('Invalid bet ID');
   }
 
-  // Use findOneAndUpdate to handle concurrency; only update if status = 'pending'
   const bet = await Bet.findOneAndUpdate(
     { _id: betId, creatorId: userId, status: 'pending' },
     { status: 'canceled' },
@@ -445,12 +474,13 @@ const cancelBet = asyncHandler(async (req, res) => {
   );
 
   if (!bet) {
+    logger.warn('Bet not found or not cancelable', { betId, userId });
     throw new ResourceNotFoundError('Bet not found or not in pending status');
   }
 
-  // Restore user balance based on currencyType
   const user = await User.findById(userId);
   if (!user) {
+    logger.error('User not found when canceling bet', { userId });
     throw new ResourceNotFoundError('User');
   }
   
@@ -461,7 +491,9 @@ const cancelBet = asyncHandler(async (req, res) => {
   }
   await user.save();
 
+  logger.info('Bet canceled successfully', { betId, userId });
   return res.json({ message: 'Bet canceled successfully', bet });
 });
 
-module.exports = { getAvailableSeekers, getBetHistory, placeBet, acceptBet, cancelBet };
+module.exports = { getBetHistory, getAvailableSeekers, placeBet, acceptBet, cancelBet };
+

@@ -2,6 +2,7 @@
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const { ExternalServiceError } = require('../utils/errorTypes');
+const logger = require('../utils/logger'); // Use structured logger
 dotenv.config();
 
 // Create a transporter using SMTP (e.g., Gmail)
@@ -13,20 +14,13 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Function to log messages based on environment
-const log = (message) => {
-  if (process.env.NODE_ENV !== 'test') {
-    console.log(message);
-  }
-};
-
 // Verify the transporter configuration only if not in test environment
 if (process.env.NODE_ENV !== 'test') {
   transporter.verify((error, success) => {
     if (error) {
-      console.error('Email transporter configuration error:', error);
+      logger.error('Email transporter configuration error', { error: error.message, stack: error.stack });
     } else {
-      log('Email transporter is ready to send messages');
+      logger.info('Email transporter is ready to send messages');
     }
   });
 }
@@ -55,10 +49,12 @@ const sendEmail = async (to, subject, text, html = null) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    log(`Email sent to ${to}: ${info.response}`);
+    if (process.env.NODE_ENV !== 'test') {
+      logger.info(`Email sent to ${to}`, { response: info.response });
+    }
     return { success: true, info };
   } catch (error) {
-    console.error(`Error sending email to ${to}:`, error);
+    logger.error(`Error sending email to ${to}`, { error: error.message, stack: error.stack });
     throw new ExternalServiceError('Email Service', `Failed to send email: ${error.message}`);
   }
 };
@@ -186,3 +182,4 @@ The Chess Betting Team
 };
 
 module.exports = { sendEmail, sendWelcomeEmail, sendBetResultEmail };
+

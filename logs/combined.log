@@ -116,3 +116,189 @@
 {"level":"http","message":"GET /auth/profile?currencyType=token 304","requestId":"a3f07415-05eb-4e45-8b53-068142338bec","responseTime":391.5625,"service":"chess-betting-service","statusCode":304,"timestamp":"2025-03-29T01:04:29.921Z","type":"api_response","userId":"67e4b606e8d019217d5d4e3d"}
 {"ip":"::1","level":"http","message":"POST /notifications/read-all","requestId":"60701b88-997a-4680-9f95-06b1f3e47609","service":"chess-betting-service","timestamp":"2025-03-29T01:04:45.300Z","type":"api_request","userId":"unauthenticated"}
 {"level":"http","message":"POST /notifications/read-all 200","requestId":"60701b88-997a-4680-9f95-06b1f3e47609","responseTime":86.9784,"service":"chess-betting-service","statusCode":200,"timestamp":"2025-03-29T01:04:45.387Z","type":"api_response","userId":"67e4b606e8d019217d5d4e3d"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:06:19.374Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:06:20.048Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:06:20.199Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:06:20.203Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:06:20.213Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:17:58.252Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:17:58.938Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:17:59.095Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:17:59.098Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:17:59.105Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:18:43.715Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:18:44.399Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:18:44.548Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:18:44.551Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:18:44.561Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:19:23.242Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:19:23.900Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:19:24.034Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:19:24.037Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:19:24.045Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:20:58.599Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:20:59.365Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:20:59.534Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:20:59.538Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:20:59.550Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:21:40.248Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:21:40.942Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:21:41.109Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:21:41.115Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:21:41.122Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:22:34.879Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:22:35.609Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:22:35.762Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:22:35.766Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:22:35.771Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:22:35.772Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:22:59.098Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:22:59.822Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:22:59.991Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:22:59.999Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:00.019Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:23:00.023Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:00.026Z"}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:23:19.935Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.664Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.816Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.818Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.822Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.823Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.825Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:23:20.825Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:24:00.170Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:24:00.256Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:24:31.169Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:24:31.891Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:24:32.045Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:24:32.048Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:24:32.053Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:24:32.054Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:24:32.056Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:24:32.057Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:25:00.255Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:25:00.317Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:25:40.654Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.340Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.483Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.488Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.497Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.499Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.502Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:25:41.503Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:26:00.643Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:26:00.720Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:26:34.642Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.036Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.292Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.457Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.461Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.470Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.473Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.475Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:26:35.476Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:27:00.642Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:27:00.699Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:27:31.332Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:27:31.763Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.006Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.153Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.156Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.162Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.163Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.164Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:27:32.165Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:28:00.394Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:28:00.602Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:28:55.721Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.166Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.415Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.551Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.554Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.560Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.561Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.563Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:28:56.563Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:29:00.588Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:29:00.643Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:29:46.117Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:29:46.600Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:29:46.909Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:29:47.070Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:29:47.072Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:29:47.078Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:29:47.079Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:29:47.080Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:29:47.080Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:30:00.223Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:30:00.289Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:30:38.205Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:30:38.624Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:30:38.876Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:30:39.013Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:30:39.015Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:30:39.021Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:30:39.022Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:30:39.023Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:30:39.024Z"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:31:00.222Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:31:00.279Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:32:07.457Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:32:07.894Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.145Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.288Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.294Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.304Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.307Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.310Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.311Z"}
+{"ip":"::1","level":"info","message":"Socket.io connection attempt","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.523Z"}
+{"ip":"::1","level":"info","message":"No token provided, allowing guest connection","service":"chess-betting-service","timestamp":"2025-03-29T01:32:08.523Z"}
+{"level":"info","message":"User connected","service":"chess-betting-service","socketId":"BUJru3Ob5Rlpww0lAAAB","timestamp":"2025-03-29T01:32:08.525Z","userId":"guest-20f2fla"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:33:00.770Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:33:00.824Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:33:55.960Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.411Z"}
+{"level":"info","message":"MongoDB connected successfully to mongodb+srv://mperkins1995:Annette1!@cluster0.1vvw3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.598Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.599Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.737Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.742Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.751Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.753Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.755Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.756Z"}
+{"ip":"::1","level":"info","message":"Socket.io connection attempt","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.806Z"}
+{"ip":"::1","level":"info","message":"No token provided, allowing guest connection","service":"chess-betting-service","timestamp":"2025-03-29T01:33:56.807Z"}
+{"level":"info","message":"User connected","service":"chess-betting-service","socketId":"Df85UjdM00IPR8vEAAAB","timestamp":"2025-03-29T01:33:56.808Z","userId":"guest-n0m4g3k"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:34:00.776Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:34:00.832Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:34:05.522Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:34:05.988Z"}
+{"level":"info","message":"MongoDB connected successfully to mongodb+srv://mperkins1995:Annette1!@cluster0.1vvw3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.213Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.214Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.374Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.378Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.387Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.389Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.391Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.392Z"}
+{"ip":"::1","level":"info","message":"Socket.io connection attempt","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.583Z"}
+{"ip":"::1","level":"info","message":"No token provided, allowing guest connection","service":"chess-betting-service","timestamp":"2025-03-29T01:34:06.585Z"}
+{"level":"info","message":"User connected","service":"chess-betting-service","socketId":"5HRHkdcQjn12hF6yAAAB","timestamp":"2025-03-29T01:34:06.587Z","userId":"guest-doi3l8c"}
+{"executionCount":1,"level":"info","message":"Game tracking service running","service":"chess-betting-service","timestamp":"2025-03-29T01:35:00.892Z"}
+{"errors":0,"level":"info","message":"Game tracking results","processed":0,"service":"chess-betting-service","timestamp":"2025-03-29T01:35:00.952Z","total":0}
+{"level":"info","message":"Starting server initialization...","service":"chess-betting-service","timestamp":"2025-03-29T01:35:07.987Z"}
+{"level":"info","message":"Email transporter is ready to send messages","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.444Z"}
+{"level":"info","message":"MongoDB connected successfully to mongodb+srv://mperkins1995:Annette1!@cluster0.1vvw3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.692Z"}
+{"level":"info","message":"MongoDB connected successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.694Z"}
+{"level":"info","message":"Admin already exists. Skipping seeding.","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.854Z"}
+{"level":"info","message":"Admin user seeded successfully.","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.855Z"}
+{"level":"info","message":"Backend server is running on port 5000","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.860Z"}
+{"level":"info","message":"Game tracking service started. Status will be logged hourly or when games are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.870Z"}
+{"level":"info","message":"Bet expiration service started. Results will be logged when bets are processed.","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.872Z"}
+{"level":"info","message":"Daily stats reset cron job scheduled for midnight","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.876Z"}
+{"level":"info","message":"Cron jobs for tracking games, expiring bets, and resetting stats started.","service":"chess-betting-service","timestamp":"2025-03-29T01:35:08.877Z"}
+{"ip":"::1","level":"info","message":"Socket.io connection attempt","service":"chess-betting-service","timestamp":"2025-03-29T01:35:09.064Z"}
+{"ip":"::1","level":"info","message":"No token provided, allowing guest connection","service":"chess-betting-service","timestamp":"2025-03-29T01:35:09.066Z"}
+{"level":"info","message":"User connected","service":"chess-betting-service","socketId":"av_7VJ4-5Y_vFXVGAAAB","timestamp":"2025-03-29T01:35:09.070Z","userId":"guest-b51vrna"}

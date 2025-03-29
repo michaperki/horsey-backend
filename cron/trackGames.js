@@ -5,6 +5,7 @@ const Bet = require('../models/Bet');
 const { getGameOutcome } = require('../services/lichessService');
 const { processBetOutcome } = require('../services/bettingService');
 const { ExternalServiceError, DatabaseError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 // Variables to help with controlling log output
 let executionCount = 0;
@@ -18,24 +19,21 @@ const LOG_INTERVAL = 60 * 60 * 1000; // Log once per hour instead of every minut
 async function processGameOutcome(gameId) {
   try {
     const gameResult = await getGameOutcome(gameId);
-    
+
     if (!gameResult.success) {
-      console.log(`Game ${gameId} is not concluded yet or had an error: ${gameResult.error}`);
+      logger.info(`Game not concluded or error encountered`, { gameId, reason: gameResult.error || 'Game not concluded' });
       return { processed: false, reason: gameResult.error || 'Game not concluded' };
     }
-    
-    console.log(`Processing concluded game: ${gameId}`);
+
+    logger.info('Processing concluded game', { gameId });
     await processBetOutcome(gameId);
     return { processed: true };
   } catch (error) {
-    console.error(`Error processing game ${gameId}:`, error.message);
-    
-    // Log more details if it's one of our custom error types
+    logger.error(`Error processing game`, { gameId, error: error.message, stack: error.stack });
     if (error.isOperational) {
-      console.error(`Error type: ${error.constructor.name}, Status: ${error.statusCode}, Code: ${error.errorCode}`);
+      logger.error('Operational error details', { errorType: error.constructor.name, status: error.statusCode, errorCode: error.errorCode });
     }
-    
-    throw error; // Let the caller handle it
+    throw error;
   }
 }
 
@@ -45,35 +43,29 @@ async function processGameOutcome(gameId) {
  */
 async function findAndProcessGames() {
   try {
-    // Find matched bets with game IDs
     const matchedBets = await Bet.find({
       status: 'matched',
       gameId: { $ne: null }
     });
-    
+
     if (matchedBets.length === 0) {
-      return { 
-        processed: 0, 
-        total: 0, 
-        errors: 0 
-      };
+      return { processed: 0, total: 0, errors: 0 };
     }
-    
-    console.log(`Found ${matchedBets.length} active games to check.`);
-    
+
+    logger.info('Found active games to check', { totalGames: matchedBets.length });
+
     const results = {
       processed: 0,
       errors: 0,
       total: matchedBets.length,
       errorDetails: []
     };
-    
-    // Process each game
+
     for (const bet of matchedBets) {
       try {
         const { gameId } = bet;
         const result = await processGameOutcome(gameId);
-        
+
         if (result.processed) {
           results.processed++;
         }
@@ -87,10 +79,10 @@ async function findAndProcessGames() {
         });
       }
     }
-    
+
     return results;
   } catch (error) {
-    console.error('Error in findAndProcessGames:', error);
+    logger.error('Error in findAndProcessGames', { error: error.message, stack: error.stack });
     throw new DatabaseError(`Failed to find and process games: ${error.message}`);
   }
 }
@@ -100,7 +92,7 @@ async function findAndProcessGames() {
  */
 function startTrackingGames() {
   if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'cypress') {
-    console.log('Cron job skipped in test/cypress environment.');
+    logger.info('Cron job skipped in test/cypress environment.');
     return;
   }
 
@@ -110,39 +102,36 @@ function startTrackingGames() {
       executionCount++;
       const currentTime = Date.now();
       const shouldLog = (currentTime - lastLogTime) >= LOG_INTERVAL;
-      
+
       if (shouldLog) {
-        console.log(`Game tracking service running. [Execution #${executionCount}]`);
+        logger.info(`Game tracking service running`, { executionCount });
         lastLogTime = currentTime;
       }
-      
+
       const results = await findAndProcessGames();
-      
-      // Log results if we processed any games or if it's time for a periodic update
+
       if (results.processed > 0 || results.errors > 0 || shouldLog) {
-        console.log(`Game tracking results: ${results.processed} processed, ${results.errors} errors out of ${results.total} games.`);
-        
+        logger.info('Game tracking results', { 
+          processed: results.processed, 
+          errors: results.errors, 
+          total: results.total 
+        });
+
         if (results.errors > 0) {
-          console.error('Error details:', results.errorDetails);
+          logger.error('Error details for game processing', { errorDetails: results.errorDetails });
         }
       }
     } catch (error) {
-      // Always log errors
-      console.error('Cron Job Error:', error.message);
-      
-      // Add stack trace for non-operational errors
-      if (!error.isOperational) {
-        console.error('Stack trace:', error.stack);
-      }
+      logger.error('Cron Job Error', { error: error.message, stack: error.stack });
     }
   });
 
-  console.log('Game tracking service started. Status will be logged hourly or when games are processed.');
+  logger.info('Game tracking service started. Status will be logged hourly or when games are processed.');
 }
 
-// Export for testing and direct use
 module.exports = { 
   startTrackingGames,
   findAndProcessGames,
   processGameOutcome
 };
+

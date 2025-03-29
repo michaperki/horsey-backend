@@ -3,16 +3,17 @@ const User = require('../models/User');
 const Bet = require('../models/Bet');
 const { asyncHandler } = require('../middleware/errorMiddleware');
 const { ResourceNotFoundError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * Get the authenticated user's profile along with updated statistics.
  */
 const getUserProfile = asyncHandler(async (req, res) => {
-  const userId = req.user.id; // assumed to be a string
-  console.log(`Fetching profile for userId: ${userId}`);
+  const userId = req.user.id;
+  logger.info('Fetching profile for user', { userId });
 
   const user = await User.findById(userId).select('-password +lichessAccessToken');
-  console.log('User fetched from DB:', user ? user.username : 'Not found');
+  logger.info('User fetched from DB', { username: user ? user.username : 'Not found' });
 
   if (!user) {
     throw new ResourceNotFoundError('User');
@@ -20,7 +21,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
 
   const currencyType = req.query.currencyType || 'token';
 
-  // Total games using an aggregation with $expr and $toString for proper string matching
+  // Total games aggregation
   const totalGamesAgg = await Bet.aggregate([
     {
       $match: {
@@ -37,9 +38,9 @@ const getUserProfile = asyncHandler(async (req, res) => {
     { $count: "totalGames" }
   ]);
   const totalGames = totalGamesAgg[0] ? totalGamesAgg[0].totalGames : 0;
-  console.log(`Total games for ${user.username} (${currencyType}): ${totalGames}`);
+  logger.info('Total games calculated', { username: user.username, currencyType, totalGames });
 
-  // Valid bets using $expr with $toString
+  // Valid bets query
   const validBets = await Bet.find({
     $expr: {
       $or: [
@@ -50,16 +51,16 @@ const getUserProfile = asyncHandler(async (req, res) => {
     status: { $in: ['won', 'lost', 'draw'] },
     currencyType,
   });
-  console.log('Valid bets:', validBets);
+  logger.debug('Valid bets retrieved', { username: user.username, count: validBets.length });
 
-  // Wins: count bets where the user is the winner
+  // Wins count
   const wins = await Bet.countDocuments({
     $expr: { $eq: [{ $toString: '$winnerId' }, userId] },
     currencyType,
   });
-  console.log(`Wins for ${user.username} (${currencyType}): ${wins}`);
+  logger.info('Wins calculated', { username: user.username, currencyType, wins });
 
-  // Losses: count bets where the user participated but did not win
+  // Losses count
   const losses = await Bet.countDocuments({
     $expr: {
       $and: [
@@ -75,7 +76,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
     status: { $in: ['won', 'lost'] },
     currencyType,
   });
-  console.log(`Losses for ${user.username} (${currencyType}): ${losses}`);
+  logger.info('Losses calculated', { username: user.username, currencyType, losses });
 
   // Total wagered and average wager aggregation
   const wagerAgg = await Bet.aggregate([
@@ -101,9 +102,9 @@ const getUserProfile = asyncHandler(async (req, res) => {
   ]);
   const totalWagered = wagerAgg[0]?.totalWagered || 0;
   const averageWager = wagerAgg[0]?.averageWager || 0;
-  console.log(`Total wagered: ${totalWagered}, Average wager: ${averageWager} (${currencyType})`);
+  logger.info('Wager statistics calculated', { username: user.username, currencyType, totalWagered, averageWager });
 
-  // Total winnings aggregation (using $ifNull in case 'winnings' isn't set)
+  // Total winnings aggregation
   const winningsAgg = await Bet.aggregate([
     {
       $match: {
@@ -119,9 +120,9 @@ const getUserProfile = asyncHandler(async (req, res) => {
     },
   ]);
   const totalWinnings = winningsAgg[0]?.totalWinnings || 0;
-  console.log(`Total winnings for ${user.username} (${currencyType}): ${totalWinnings}`);
+  logger.info('Total winnings calculated', { username: user.username, currencyType, totalWinnings });
 
-  // Total losses aggregation for bets lost by the user
+  // Total losses aggregation
   const lossesAgg = await Bet.aggregate([
     {
       $match: {
@@ -148,15 +149,15 @@ const getUserProfile = asyncHandler(async (req, res) => {
     },
   ]);
   const totalLosses = lossesAgg[0]?.totalLosses || 0;
-  console.log(`Total losses for ${user.username} (${currencyType}): ${totalLosses}`);
+  logger.info('Total losses calculated', { username: user.username, currencyType, totalLosses });
 
   // Calculate ROI
   const averageROI =
     totalWagered > 0 ? (((totalWinnings - totalLosses) / totalWagered) * 100).toFixed(2) : '0.00';
-  console.log(`Calculated ROI for ${user.username} (${currencyType}): ${averageROI}%`);
+  logger.info('ROI calculated', { username: user.username, currencyType, averageROI });
 
   const { karma, membership, tokenBalance } = user;
-  console.log('Sending user profile response');
+  logger.info('Sending user profile response', { username: user.username });
   res.json({
     user: {
       username: user.username,
@@ -179,7 +180,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
       totalLosses,
       karma,
       membership,
-      ratingClass: user.ratingClass, // Include rating class in response
+      ratingClass: user.ratingClass,
       points: tokenBalance,
     },
   });
@@ -193,6 +194,7 @@ const getUserData = asyncHandler(async (req, res) => {
     throw new ResourceNotFoundError('User');
   }
 
+  logger.info('User data fetched', { userId, notifications: user.notifications || 0 });
   res.json({ notifications: user.notifications || 0 });
 });
 
@@ -204,6 +206,7 @@ const getUserBalances = asyncHandler(async (req, res) => {
     throw new ResourceNotFoundError('User');
   }
 
+  logger.info('User balances retrieved', { userId, tokenBalance: user.tokenBalance, sweepstakesBalance: user.sweepstakesBalance });
   res.json({
     tokenBalance: user.tokenBalance,
     sweepstakesBalance: user.sweepstakesBalance,
@@ -211,3 +214,4 @@ const getUserBalances = asyncHandler(async (req, res) => {
 });
 
 module.exports = { getUserProfile, getUserData, getUserBalances };
+

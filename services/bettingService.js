@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { getGameOutcome } = require('./lichessService');
 const { sendNotification } = require('./notificationService');
 const { ResourceNotFoundError, ExternalServiceError, DatabaseError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * Processes bets for a concluded game.
@@ -32,7 +33,6 @@ const processBetOutcome = async (gameId) => {
   const whiteUser = await User.findOne({ lichessUsername: whiteUsername });
   const blackUser = await User.findOne({ lichessUsername: blackUsername });
 
-  // (It's possible these might be missing for some reason; handle gracefully)
   if (!whiteUser || !blackUser) {
     throw new ResourceNotFoundError(`Could not find white or black user for game ${gameId}`);
   }
@@ -65,23 +65,21 @@ const processBetOutcome = async (gameId) => {
     await session.commitTransaction();
     session.endSession();
 
+    logger.info('Processed bet outcomes', { gameId, outcome });
     return { success: true, message: `Processed bets for Game ID ${gameId}.` };
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    console.error('Error processing bet outcome:', error);
+    logger.error('Error processing bet outcome', { gameId, error: error.message, stack: error.stack });
     
-    // Re-throw as DatabaseError if it's a DB-related error
     if (error.name === 'MongoError' || error.name === 'MongoServerError') {
       throw new DatabaseError(`Failed to process bet outcome: ${error.message}`);
     }
     
-    // Re-throw AppErrors as is
     if (error.isOperational) {
       throw error;
     }
     
-    // Otherwise, throw a generic error
     throw new Error(`Failed to process bet outcome: ${error.message}`);
   }
 };
@@ -108,7 +106,9 @@ async function refundBalance(user, amount, balanceKey, gameId, session) {
       `Game ${gameId} ended in a draw. Refunded ${amount}. Old: ${oldBalance}, New: ${user[balanceKey]}`,
       'betDrawn'
     );
+    logger.info('Refunded user balance for draw', { userId: user._id, gameId, refunded: amount, oldBalance, newBalance: user[balanceKey] });
   } catch (error) {
+    logger.error('Failed to refund user balance', { userId: user._id, gameId, error: error.message });
     throw new DatabaseError(`Failed to refund user balance: ${error.message}`);
   }
 }
@@ -128,9 +128,12 @@ async function handleWin(bet, winner, session) {
       `Congrats! You won ${pot}. Old: ${oldBalance}, New: ${winner[balanceKey]}`,
       'tokensWon'
     );
+    logger.info('Updated winner balance', { winnerId: winner._id, gameId: bet.gameId, pot, oldBalance, newBalance: winner[balanceKey] });
   } catch (error) {
+    logger.error('Failed to update winner balance', { winnerId: winner._id, gameId: bet.gameId, error: error.message });
     throw new DatabaseError(`Failed to update winner balance: ${error.message}`);
   }
 }
 
 module.exports = { processBetOutcome };
+

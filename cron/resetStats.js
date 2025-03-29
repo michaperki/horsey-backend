@@ -2,6 +2,7 @@
 const cron = require('node-cron');
 const { resetDailyGames } = require('../services/statsService');
 const { DatabaseError } = require('../utils/errorTypes');
+const logger = require('../utils/logger');
 
 /**
  * Resets daily statistics with error handling
@@ -9,17 +10,17 @@ const { DatabaseError } = require('../utils/errorTypes');
 async function performDailyReset() {
   try {
     await resetDailyGames();
-    console.log(`[${new Date().toISOString()}] Daily games count reset successfully`);
+    logger.info('Daily games count reset successfully', { timestamp: new Date().toISOString() });
     return { success: true };
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error resetting daily games:`, error);
-    
-    // If it's already an operational error, re-throw it
+    logger.error('Error resetting daily games', { 
+      timestamp: new Date().toISOString(), 
+      error: error.message, 
+      stack: error.stack 
+    });
     if (error.isOperational) {
       throw error;
     }
-    
-    // Otherwise, wrap it in a DatabaseError
     throw new DatabaseError(`Failed to reset daily games: ${error.message}`);
   }
 }
@@ -31,14 +32,17 @@ if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'cypress') {
     try {
       await performDailyReset();
     } catch (error) {
-      console.error('Failed to reset daily stats in cron job:', error);
+      logger.error('Failed to reset daily stats in cron job', { 
+        error: error.message, 
+        stack: error.stack 
+      });
     }
   });
   
-  console.log('Daily stats reset cron job scheduled for midnight');
+  logger.info('Daily stats reset cron job scheduled for midnight');
 }
 
-// Export for testing and direct use
 module.exports = {
   performDailyReset
 };
+

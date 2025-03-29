@@ -1,10 +1,11 @@
 // backend/socket.js
-
+//
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const { getStats } = require('./services/statsService');
 const { AuthenticationError } = require('./utils/errorTypes');
+const logger = require('./utils/logger');
 
 dotenv.config();
 
@@ -20,7 +21,7 @@ const broadcastStats = async (io) => {
     const stats = await getStats(onlineUsers);
     io.emit("liveStats", stats);
   } catch (error) {
-    console.error('Error broadcasting stats:', error.message);
+    logger.error('Error broadcasting stats', { error: error.message, stack: error.stack });
   }
 };
 
@@ -57,20 +58,20 @@ const initializeSocket = (server) => {
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     const ip = socket.handshake.address;
-    console.log(`Socket.io connection attempt from IP: ${ip}`);
+    logger.info('Socket.io connection attempt', { ip });
 
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         socket.user = decoded;
-        console.log(`Authentication successful for user ID: ${socket.user.id}`);
+        logger.info('Authentication successful', { userId: socket.user.id });
         next();
       } catch (err) {
-        console.error(`Authentication failed from IP: ${ip}: ${err.message}`);
+        logger.error('Authentication failed', { ip, error: err.message });
         next(new AuthenticationError('Authentication error: Invalid token'));
       }
     } else {
-      console.log(`No token provided, allowing guest connection from IP: ${ip}`);
+      logger.info('No token provided, allowing guest connection', { ip });
       socket.user = { id: `guest-${Math.random().toString(36).substring(2, 9)}` };
       next();
     }
@@ -78,7 +79,7 @@ const initializeSocket = (server) => {
 
   // Connection event handler
   io.on('connection', async (socket) => {
-    console.log(`User connected: ID=${socket.user.id}, SocketID=${socket.id}`);
+    logger.info('User connected', { userId: socket.user.id, socketId: socket.id });
     
     // Join user-specific room for targeted messages
     socket.join(socket.user.id);
@@ -97,34 +98,34 @@ const initializeSocket = (server) => {
 
     // Handle client events
     socket.on('client_event', (data) => {
-      console.log(`Received 'client_event' from User ID=${socket.user.id}:`, data);
+      logger.info('Received client_event', { userId: socket.user.id, data });
     });
 
     // Handle game finished events
     socket.on('gameFinished', async () => {
-      // Broadcast updated stats
       await broadcastStats(io);
     });
 
-    // Handle disconnect events
+    // Handle disconnecting event
     socket.on('disconnecting', () => {
-      console.log(`User ID=${socket.user.id} is disconnecting from rooms: ${[...socket.rooms]}`);
+      logger.info('User disconnecting', { userId: socket.user.id, rooms: [...socket.rooms] });
     });
 
+    // Handle disconnect event
     socket.on('disconnect', async (reason) => {
-      console.log(`User disconnected: ID=${socket.user.id}, Reason: ${reason}`);
+      logger.info('User disconnected', { userId: socket.user.id, reason });
       await broadcastStats(io);
     });
 
     // Handle socket errors
     socket.on('error', (error) => {
-      console.error(`Error on socket ID=${socket.id} for User ID=${socket.user.id}:`, error);
+      logger.error('Error on socket', { socketId: socket.id, userId: socket.user.id, error: error.message });
     });
   });
 
   // Handle global Socket.io errors
   io.on('error', (error) => {
-    console.error('Global Socket.io error:', error);
+    logger.error('Global Socket.io error', { error: error.message });
   });
 
   return io;
@@ -143,3 +144,4 @@ const getIO = () => {
 };
 
 module.exports = { initializeSocket, getIO, broadcastStats };
+
