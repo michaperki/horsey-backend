@@ -112,7 +112,6 @@ app.use('/health', healthRoutes);
 
 // Metrics endpoint - protected by authentication and admin authorization
 app.get('/metrics', metricsHandler);
-
 // Apply general API rate limiter to all routes
 app.use(apiLimiter);
 

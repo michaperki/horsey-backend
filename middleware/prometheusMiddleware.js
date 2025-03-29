@@ -27,7 +27,7 @@ let cronJobDuration;
 let trackedBetsGauge;
 
 // Configure metrics pushing
-const ENABLE_DIRECT_PUSH = snappy ? true : false;
+const ENABLE_DIRECT_PUSH = false;
 
 try {
   // Enable collection of default metrics
