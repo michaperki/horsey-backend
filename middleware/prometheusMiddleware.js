@@ -2,7 +2,8 @@
 
 const promClient = require('prom-client');
 const logger = require('../utils/logger');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+// Use direct import instead of dynamic import to avoid potential issues
+const fetch = require('node-fetch');
 
 // Create a Registry to register metrics
 const register = new promClient.Registry();
@@ -138,10 +139,17 @@ try {
  * Pushes metrics to Grafana Cloud Prometheus using service account token
  */
 async function pushMetricsToGrafana() {
+  // Debug logging
+  console.log('pushMetricsToGrafana called');
+  console.log(`GRAFANA_CLOUD_PROMETHEUS_URL exists: ${!!process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
+  console.log(`GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN exists: ${!!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`);
+  console.log(`GRAFANA_CLOUD_USERNAME exists: ${!!process.env.GRAFANA_CLOUD_USERNAME}`);
+  
   // Check for service account token first, then fall back to username/key for backward compatibility
   if (!process.env.GRAFANA_CLOUD_PROMETHEUS_URL || 
       (!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN && 
        (!process.env.GRAFANA_CLOUD_USERNAME || !process.env.GRAFANA_CLOUD_API_KEY))) {
+    console.log('Missing Grafana Cloud configuration');
     return { success: false, reason: 'Missing Grafana Cloud configuration' };
   }
 
@@ -154,18 +162,25 @@ async function pushMetricsToGrafana() {
     lastPushTime = now;
 
     const metrics = await register.metrics();
+    console.log(`Metrics size: ${metrics.length} bytes`);
     
     // Determine authorization method
     let authHeader;
+    let authMethod;
     if (process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN) {
       // Service account token (preferred)
       authHeader = `Bearer ${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`;
-      logger.debug('Using service account token for Grafana Cloud authentication');
+      authMethod = 'service account token';
+      console.log('Using service account token for Grafana Cloud authentication');
     } else {
       // Fall back to username/API key (legacy)
       authHeader = `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_API_KEY}`).toString('base64')}`;
-      logger.debug('Using username/API key for Grafana Cloud authentication');
+      authMethod = 'username/API key';
+      console.log('Using username/API key for Grafana Cloud authentication');
     }
+    
+    console.log(`Pushing metrics to: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
+    console.log(`Auth method: ${authMethod}`);
     
     const response = await fetch(process.env.GRAFANA_CLOUD_PROMETHEUS_URL, {
       method: 'POST',
@@ -176,10 +191,22 @@ async function pushMetricsToGrafana() {
       }
     });
     
+    console.log(`Response status: ${response.status}`);
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      // Try to get the response text for better error details
+      let responseText = '';
+      try {
+        responseText = await response.text();
+      } catch (e) {
+        responseText = 'Could not read response body';
+      }
+      console.log(`Error response: ${responseText}`);
+      throw new Error(`HTTP error! Status: ${response.status}, Response: ${responseText}`);
     }
     
+    // Success log
+    console.log('Metrics push successful!');
     logger.debug('Metrics pushed to Grafana Cloud successfully', {
       size: metrics.length,
       statusCode: response.status
@@ -187,12 +214,25 @@ async function pushMetricsToGrafana() {
     
     return { success: true };
   } catch (error) {
+    // Enhanced error logging
+    console.error(`Error pushing metrics to Grafana Cloud: ${error.message}`);
+    console.error(`Error stack: ${error.stack}`);
+    
     logger.error('Error pushing metrics to Grafana Cloud', { 
       error: error.message, 
       stack: error.stack 
     });
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Force push metrics regardless of time throttling
+ */
+async function forcePushMetricsToGrafana() {
+  // Reset the last push time to ensure we can push
+  lastPushTime = 0;
+  return await pushMetricsToGrafana();
 }
 
 /**
@@ -274,18 +314,70 @@ const httpMetricsMiddleware = (req, res, next) => {
  */
 const metricsHandler = async (req, res) => {
   try {
+    console.log('Metrics endpoint hit');
     // If we're in production and Grafana Cloud is configured,
     // push metrics when the endpoint is hit to ensure fresh data
     if (process.env.NODE_ENV === 'production' && 
         process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
-      await pushMetricsToGrafana();
+      console.log('Attempting to push metrics from endpoint handler');
+      await forcePushMetricsToGrafana();
     }
 
+    const metrics = await register.metrics();
+    console.log(`Returning ${metrics.length} bytes of metrics data`);
     res.set('Content-Type', register.contentType);
-    res.end(await register.metrics());
+    res.end(metrics);
   } catch (error) {
+    console.error(`Error in metrics handler: ${error.message}`);
     logger.error('Error collecting metrics', { error: error.message });
     res.status(500).send(`Error collecting metrics: ${error.message}`);
+  }
+};
+
+/**
+ * Debug handler that returns information about the metrics setup
+ */
+const metricsDebugHandler = async (req, res) => {
+  try {
+    const metrics = await register.metrics();
+    const result = {
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        GRAFANA_CLOUD_PROMETHEUS_URL: process.env.GRAFANA_CLOUD_PROMETHEUS_URL ? 
+          `${process.env.GRAFANA_CLOUD_PROMETHEUS_URL.substring(0, 30)}...` : undefined,
+        GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN_exists: !!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN,
+        GRAFANA_CLOUD_USERNAME_exists: !!process.env.GRAFANA_CLOUD_USERNAME,
+      },
+      metrics: {
+        count: Object.keys(register.getSingleMetric()).length,
+        size: metrics.length,
+        sample: metrics.substring(0, 200) + '...',
+      }
+    };
+
+    // Try pushing metrics
+    if (process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
+      try {
+        result.pushAttempt = await forcePushMetricsToGrafana();
+      } catch (pushError) {
+        result.pushAttempt = { 
+          success: false, 
+          error: pushError.message 
+        };
+      }
+    } else {
+      result.pushAttempt = { 
+        success: false, 
+        reason: 'No Grafana Cloud URL configured' 
+      };
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
   }
 };
 
@@ -293,32 +385,54 @@ const metricsHandler = async (req, res) => {
 if (process.env.NODE_ENV === 'production' && 
     process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
   
+  console.log('Setting up automatic metrics push');
+  
   // Start periodic push to Grafana Cloud
   const pushInterval = setInterval(async () => {
     try {
+      console.log('Executing scheduled metrics push');
       await pushMetricsToGrafana();
     } catch (err) {
+      console.error(`Scheduled metrics push failed: ${err.message}`);
       logger.error('Scheduled metrics push failed', { error: err.message });
     }
   }, PUSH_INTERVAL_MS);
   
+  // Force an initial push
+  setTimeout(async () => {
+    try {
+      console.log('Executing initial metrics push');
+      await pushMetricsToGrafana();
+    } catch (err) {
+      console.error(`Initial metrics push failed: ${err.message}`);
+    }
+  }, 5000);
+  
   // Ensure clean shutdown
   process.on('SIGTERM', () => {
+    console.log('Received SIGTERM, cleaning up metrics push interval');
     clearInterval(pushInterval);
   });
   
+  const authMethod = process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN ? 'service account token' : 'username/API key';
   logger.info('Grafana Cloud metrics push enabled', {
     intervalMs: PUSH_INTERVAL_MS,
     endpoint: process.env.GRAFANA_CLOUD_PROMETHEUS_URL.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'),
-    authMethod: process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN ? 'service account token' : 'username/API key'
+    authMethod
   });
+  
+  console.log(`Grafana Cloud metrics push enabled (${authMethod})`);
+  console.log(`Push interval: ${PUSH_INTERVAL_MS}ms`);
+  console.log(`Endpoint: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL.substring(0, 30)}...`);
 }
 
 // Export the middleware and metrics
 module.exports = {
   httpMetricsMiddleware,
   metricsHandler,
+  metricsDebugHandler,
   pushMetricsToGrafana,
+  forcePushMetricsToGrafana,
   register,
   metrics: {
     register,
