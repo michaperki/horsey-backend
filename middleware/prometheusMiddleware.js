@@ -2,8 +2,9 @@
 
 const promClient = require('prom-client');
 const logger = require('../utils/logger');
-// Use direct import instead of dynamic import to avoid potential issues
-const fetch = require('node-fetch');
+// Fix the fetch import issue
+const https = require('https');
+const http = require('http');
 
 // Create a Registry to register metrics
 const register = new promClient.Registry();
@@ -136,6 +137,55 @@ try {
 }
 
 /**
+ * Manual HTTP request implementation since fetch is not available
+ */
+function makeRequest(url, options, data) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const isHttps = urlObj.protocol === 'https:';
+    const requestModule = isHttps ? https : http;
+    
+    const requestOptions = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || (isHttps ? 443 : 80),
+      path: `${urlObj.pathname}${urlObj.search}`,
+      method: options.method || 'GET',
+      headers: options.headers || {}
+    };
+    
+    console.log(`Making ${requestOptions.method} request to ${urlObj.hostname}${urlObj.pathname}`);
+    
+    const req = requestModule.request(requestOptions, (res) => {
+      let responseData = '';
+      
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+      
+      res.on('end', () => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          text: () => Promise.resolve(responseData),
+          json: () => Promise.resolve(JSON.parse(responseData))
+        });
+      });
+    });
+    
+    req.on('error', (error) => {
+      console.error(`Request error: ${error.message}`);
+      reject(error);
+    });
+    
+    if (data) {
+      req.write(data);
+    }
+    
+    req.end();
+  });
+}
+
+/**
  * Pushes metrics to Grafana Cloud Prometheus using service account token
  */
 async function pushMetricsToGrafana() {
@@ -182,14 +232,18 @@ async function pushMetricsToGrafana() {
     console.log(`Pushing metrics to: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
     console.log(`Auth method: ${authMethod}`);
     
-    const response = await fetch(process.env.GRAFANA_CLOUD_PROMETHEUS_URL, {
-      method: 'POST',
-      body: metrics,
-      headers: {
-        'Content-Type': register.contentType,
-        'Authorization': authHeader
-      }
-    });
+    // Use our custom request function instead of fetch
+    const response = await makeRequest(
+      process.env.GRAFANA_CLOUD_PROMETHEUS_URL, 
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': register.contentType,
+          'Authorization': authHeader
+        }
+      },
+      metrics
+    );
     
     console.log(`Response status: ${response.status}`);
     
