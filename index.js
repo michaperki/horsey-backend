@@ -1,20 +1,35 @@
-// backend/index.js
+// backend/index.js - Updated with better environment handling
 const http = require('http');
 const app = require('./server');
 const connectDB = require('./config/db');
 const dotenv = require('dotenv');
+const path = require('path');
 const { initializeSocket } = require('./socket');
 const seedAdmin = require('./scripts/seedAdmin');
 const { startTrackingGames } = require('./cron/trackGames');
 const { startExpiringBets } = require('./cron/expireBets');
 const logger = require('./utils/logger');
 
-// Load environment variables
-dotenv.config();
+// Determine which .env file to use
+const envFile = process.env.NODE_ENV === 'test'
+  ? '.env.test'
+  : (process.env.NODE_ENV === 'cypress' ? '.env.cypress' : 
+     (process.env.NODE_ENV === 'production' ? '.env.production' : '.env'));
+
+// Load environment variables from the appropriate file
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+// Log environment information
+logger.info('Starting server with environment', {
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  envFile,
+  isNetlify: !!process.env.NETLIFY,
+  isHeroku: !!process.env.DYNO
+});
 
 // Global error handling for uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error('UNCAUGHT EXCEPTION! 💥', error.stack || error.toString());
+  logger.error('UNCAUGHT EXCEPTION! 💥', { error: error.message, stack: error.stack });
   
   // Don't exit the process in development to allow for debugging
   if (process.env.NODE_ENV === 'production') {
@@ -24,7 +39,7 @@ process.on('uncaughtException', (error) => {
 
 // Global error handling for unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('UNHANDLED REJECTION! 💥', reason.stack || reason.toString());
+  logger.error('UNHANDLED REJECTION! 💥', { error: reason.message, stack: reason.stack });
   
   // Don't exit the process in development to allow for debugging
   if (process.env.NODE_ENV === 'production') {
@@ -44,14 +59,17 @@ app.set('io', io);
 // Connect to MongoDB and start the server
 async function startServer() {
   try {
-    console.log('Starting server initialization...');
+    logger.info('Starting server initialization...', {
+      environment: process.env.NODE_ENV || 'development',
+      database: process.env.MONGODB_URI?.split('/').pop() || 'unknown'
+    });
     
     // Connect to MongoDB
     try {
       await connectDB();
-      console.log('MongoDB connected successfully.');
+      logger.info('MongoDB connected successfully.');
     } catch (error) {
-      console.error('Failed to connect to MongoDB:', error.stack);
+      logger.error('Failed to connect to MongoDB:', { error: error.message, stack: error.stack });
       process.exit(1);
     }
     
@@ -59,9 +77,9 @@ async function startServer() {
     if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'cypress') {
       try {
         await seedAdmin();
-        console.log('Admin user seeded successfully.');
+        logger.info('Admin user seeded successfully.');
       } catch (error) {
-        console.error('Error seeding admin user:', error.stack);
+        logger.error('Error seeding admin user:', { error: error.message, stack: error.stack });
         // Continue even if seeding fails
       }
     }
@@ -69,36 +87,44 @@ async function startServer() {
     // Start the server
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => {
-      console.log(`Backend server is running on port ${PORT}`);
+      logger.info(`Backend server is running on port ${PORT}`, {
+        environment: process.env.NODE_ENV || 'development',
+        port: PORT,
+        database: process.env.MONGODB_URI?.split('/').pop() || 'unknown'
+      });
       
       // Initialize the cron jobs
       try {
-        startTrackingGames();
-        startExpiringBets();
-        require('./cron/resetStats'); // schedules the reset stats job
-        console.log('Cron jobs for tracking games, expiring bets, and resetting stats started.');
+        if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'cypress') {
+          startTrackingGames();
+          startExpiringBets();
+          require('./cron/resetStats'); // schedules the reset stats job
+          logger.info('Cron jobs for tracking games, expiring bets, and resetting stats started.');
+        } else {
+          logger.info('Skipping cron jobs in test/cypress environment.');
+        }
       } catch (error) {
-        console.error('Error initializing cron jobs:', error.stack);
+        logger.error('Error initializing cron jobs:', { error: error.message, stack: error.stack });
         // Continue even if cron jobs fail to initialize
       }
     });
     
     // Listen for server close to perform cleanup
     server.on('close', () => {
-      console.log('Server shutting down. Performing cleanup...');
+      logger.info('Server shutting down. Performing cleanup...');
     });
     
   } catch (error) {
-    console.error('Server initialization error:', error.stack);
+    logger.error('Server initialization error:', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 }
 
 // Graceful shutdown for SIGTERM
 process.on('SIGTERM', () => {
-  console.log('👋 SIGTERM RECEIVED. Shutting down gracefully');
+  logger.info('👋 SIGTERM RECEIVED. Shutting down gracefully');
   server.close(() => {
-    console.log('💥 Process terminated!');
+    logger.info('💥 Process terminated!');
   });
 });
 

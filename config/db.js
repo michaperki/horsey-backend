@@ -23,13 +23,15 @@ const setupMongooseMonitoring = () => {
   connection.on('connected', () => {
     logger.info('MongoDB connected successfully', {
       environment: config.env, 
-      database: connection.name
+      database: connection.name,
+      host: connection.host
     });
   });
   
   connection.on('disconnected', () => {
     logger.warn('MongoDB disconnected', {
-      environment: config.env
+      environment: config.env,
+      database: connection.name
     });
   });
   
@@ -43,7 +45,8 @@ const setupMongooseMonitoring = () => {
   
   connection.on('reconnected', () => {
     logger.info('MongoDB reconnected', {
-      environment: config.env
+      environment: config.env,
+      database: connection.name
     });
   });
   
@@ -90,10 +93,22 @@ const connectDB = async () => {
       throw new Error(`No MongoDB URI defined for environment: ${config.env}`);
     }
     
+    // Determine database type for logging
+    let dbType = 'default';
+    if (config.env === 'test') dbType = 'test';
+    else if (config.env === 'cypress') dbType = 'cypress';
+    else if (config.env === 'development') dbType = 'development';
+    else if (config.env === 'production') {
+      if (config.deployment.isNetlify) dbType = 'netlify-production';
+      else if (config.deployment.isHeroku) dbType = 'heroku-production';
+      else dbType = 'production';
+    }
+    
     // Connect to MongoDB with enhanced logging
     logger.info('Connecting to MongoDB', { 
       uri: config.db.uri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'), // Hide credentials in logs
-      environment: config.env
+      environment: config.env,
+      dbType
     });
     
     await mongoose.connect(config.db.uri, config.db.options);
@@ -101,7 +116,8 @@ const connectDB = async () => {
     logger.info('MongoDB connected successfully', { 
       host: mongoose.connection.host,
       name: mongoose.connection.name,
-      environment: config.env
+      environment: config.env,
+      dbType
     });
     
     // Get some basic MongoDB stats
@@ -112,14 +128,16 @@ const connectDB = async () => {
       avgObjSize: stats.avgObjSize,
       dataSize: `${(stats.dataSize / (1024 * 1024)).toFixed(2)} MB`,
       storageSize: `${(stats.storageSize / (1024 * 1024)).toFixed(2)} MB`,
-      environment: config.env
+      environment: config.env,
+      dbType
     });
     
   } catch (error) {
     logger.error('MongoDB connection error', { 
       error: error.message, 
       stack: error.stack,
-      environment: config.env
+      environment: config.env,
+      uri: config.db.uri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@') // Hide credentials in logs
     });
     process.exit(1);
   }

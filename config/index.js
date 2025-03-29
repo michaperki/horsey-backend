@@ -1,4 +1,4 @@
-// config/index.js - Simplified version with backward compatibility
+// config/index.js - Enhanced with additional logging
 
 const dotenv = require('dotenv');
 const path = require('path');
@@ -12,9 +12,16 @@ const envFile = process.env.NODE_ENV === 'test'
 // Load configuration from the appropriate .env file
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-// Log which environment file was loaded
-logger.info(`Loaded environment configuration from ${envFile}`, {
-  environment: process.env.NODE_ENV || 'default'
+// Enhanced logging for environment details
+logger.info('Environment configuration details:', {
+  NODE_ENV: process.env.NODE_ENV || 'not set',
+  envFile,
+  isNetlify: !!process.env.NETLIFY,
+  isHeroku: !!process.env.DYNO,
+  MONGODB_URI_exists: !!process.env.MONGODB_URI,
+  MONGODB_URI_PROD_exists: !!process.env.MONGODB_URI_PROD,
+  MONGODB_URI_DEV_exists: !!process.env.MONGODB_URI_DEV,
+  MONGODB_URI_TEST_exists: !!process.env.MONGODB_URI_TEST
 });
 
 /**
@@ -39,34 +46,86 @@ const validateEnv = () => {
   }
   const missingVars = requiredVariables.filter(varName => !process.env[varName]);
   if (missingVars.length > 0) {
+    logger.error(`Missing required environment variables: ${missingVars.join(', ')}`);
     throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
+  logger.info('All required environment variables are present');
 };
 
 /**
  * Get appropriate MongoDB URI based on environment
- * First checks for environment-specific URI variables, falls back to MONGODB_URI
+ * Enhanced with detailed logging
  */
 const getMongoURI = () => {
-  // Check for environment-specific MongoDB URI
-  if (process.env.NODE_ENV === 'test' && process.env.MONGODB_URI_TEST) {
-    return process.env.MONGODB_URI_TEST;
+  let selectedUri;
+  let source;
+  
+  // Test environments (both Jest and Cypress)
+  if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'cypress') {
+    selectedUri = process.env.MONGODB_URI_TEST || process.env.MONGODB_URI;
+    source = process.env.MONGODB_URI_TEST ? 'MONGODB_URI_TEST' : 'MONGODB_URI (fallback)';
+    logger.info(`Using test database URI from ${source}`);
   }
   
-  if (process.env.NODE_ENV === 'development' && process.env.MONGODB_URI_DEV) {
-    return process.env.MONGODB_URI_DEV;
+  // Development environment
+  else if (process.env.NODE_ENV === 'development') {
+    selectedUri = process.env.MONGODB_URI_DEV || process.env.MONGODB_URI;
+    source = process.env.MONGODB_URI_DEV ? 'MONGODB_URI_DEV' : 'MONGODB_URI (fallback)';
+    logger.info(`Using development database URI from ${source}`);
   }
   
-  if (process.env.NODE_ENV === 'production' && process.env.MONGODB_URI_PROD) {
-    return process.env.MONGODB_URI_PROD;
-  }
-  
-  if (process.env.NODE_ENV === 'cypress' && process.env.MONGODB_URI_CYPRESS) {
-    return process.env.MONGODB_URI_CYPRESS;
+  // Production environment (includes Netlify and other deployment targets)
+  else if (process.env.NODE_ENV === 'production') {
+    selectedUri = process.env.MONGODB_URI_PROD || process.env.MONGODB_URI;
+    source = process.env.MONGODB_URI_PROD ? 'MONGODB_URI_PROD' : 'MONGODB_URI (fallback)';
+    logger.info(`Using production database URI from ${source}`);
+    
+    // Additional logging for Netlify environments
+    if (process.env.NETLIFY) {
+      logger.info('Netlify environment detected', {
+        MONGODB_URI_PROD_exists: !!process.env.MONGODB_URI_PROD,
+        MONGODB_URI_exists: !!process.env.MONGODB_URI,
+        selected_source: source
+      });
+    }
   }
   
   // Default fallback - this ensures backward compatibility
-  return process.env.MONGODB_URI;
+  else {
+    selectedUri = process.env.MONGODB_URI;
+    source = 'MONGODB_URI (default)';
+    logger.info(`Using default database URI from ${source}`);
+  }
+  
+  // Extract database name from the URI for logging purposes
+  let dbName = 'unknown';
+  try {
+    if (selectedUri) {
+      if (selectedUri.includes('mongodb+srv://')) {
+        // For Atlas connection strings
+        const queryParams = selectedUri.split('?')[0];
+        const pathParts = queryParams.split('/');
+        dbName = pathParts[pathParts.length - 1] || 'unknown';
+      } else {
+        // For standard connection strings
+        const parts = selectedUri.split('/');
+        dbName = parts[parts.length - 1].split('?')[0] || 'unknown';
+      }
+    }
+  } catch (error) {
+    logger.warn('Could not extract database name from URI', { error: error.message });
+  }
+  
+  // Log the selected URI with credentials hidden
+  const maskedUri = selectedUri ? selectedUri.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@') : 'undefined';
+  logger.info(`Selected MongoDB URI: ${maskedUri}`, { 
+    databaseName: dbName,
+    source,
+    environment: process.env.NODE_ENV || 'default',
+    isNetlify: !!process.env.NETLIFY
+  });
+  
+  return selectedUri;
 };
 
 /**
@@ -143,7 +202,19 @@ const config = {
       max: parseInt(process.env.RATE_LIMIT_BET || '10', 10),
     },
   },
+  deployment: {
+    isNetlify: !!process.env.NETLIFY,
+    isHeroku: !!process.env.DYNO,
+  }
 };
+
+// Final configuration summary
+logger.info('Application configuration initialized', {
+  environment: config.env,
+  isNetlify: config.deployment.isNetlify,
+  isHeroku: config.deployment.isHeroku,
+  databaseConfigured: !!config.db.uri
+});
 
 module.exports = {
   validateEnv,

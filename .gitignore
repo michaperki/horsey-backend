@@ -5,3 +5,4 @@ logs/
 .env.test
 .env.cypress
 .env.development
+.env.production
