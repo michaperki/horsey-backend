@@ -19,6 +19,15 @@ const envFile = process.env.NODE_ENV === 'test'
 // Load environment variables from the appropriate file
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
+// Add Grafana debug logging
+console.log('===== GRAFANA CLOUD DEBUG =====');
+console.log(`GRAFANA_CLOUD_PROMETHEUS_URL exists: ${!!process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
+console.log(`GRAFANA_CLOUD_PROMETHEUS_URL: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL?.substring(0, 30)}...`);
+console.log(`GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN exists: ${!!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`);
+console.log(`GRAFANA_CLOUD_USERNAME exists: ${!!process.env.GRAFANA_CLOUD_USERNAME}`);
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log('================================');
+
 // Log environment information
 logger.info('Starting server with environment', {
   NODE_ENV: process.env.NODE_ENV || 'development',
