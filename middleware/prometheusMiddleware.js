@@ -154,6 +154,7 @@ function makeRequest(url, options, data) {
     };
     
     console.log(`Making ${requestOptions.method} request to ${urlObj.hostname}${urlObj.pathname}`);
+    console.log(`Headers: ${JSON.stringify(requestOptions.headers)}`);
     
     const req = requestModule.request(requestOptions, (res) => {
       let responseData = '';
@@ -214,14 +215,17 @@ async function pushMetricsToGrafana() {
     const metrics = await register.metrics();
     console.log(`Metrics size: ${metrics.length} bytes`);
     
+    // In the pushMetricsToGrafana function, modify the auth header section:
+
     // Determine authorization method
     let authHeader;
     let authMethod;
     if (process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN) {
-      // Service account token (preferred)
-      authHeader = `Bearer ${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`;
-      authMethod = 'service account token';
-      console.log('Using service account token for Grafana Cloud authentication');
+      // Adjusted: Try using basic auth with username and token instead of Bearer
+      const username = process.env.GRAFANA_CLOUD_USERNAME || '2351791'; // Use the provided username or default to instance ID
+      authHeader = `Basic ${Buffer.from(`${username}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`;
+      authMethod = 'basic auth with service token';
+      console.log(`Using basic auth with username ${username} and service token`);
     } else {
       // Fall back to username/API key (legacy)
       authHeader = `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_API_KEY}`).toString('base64')}`;

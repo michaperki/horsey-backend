@@ -144,9 +144,23 @@ app.get('/debug-grafana', (req, res) => {
   const { metricsDebugHandler } = require('./middleware/prometheusMiddleware');
   return metricsDebugHandler(req, res);
 });
-// Add this route before your other metrics route
-app.get('/debug-grafana', require('./middleware/prometheusMiddleware').metricsDebugHandler);
 
+// Add debug endpoint for token info (don't expose in production!)
+app.get('/debug-token', (req, res) => {
+  const username = process.env.GRAFANA_CLOUD_USERNAME || '2351791';
+  const token = process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN || 'not-set';
+  const maskedToken = token.substring(0, 10) + '...' + token.substring(token.length - 5);
+  
+  res.json({
+    username,
+    token_format: token.startsWith('glc_') ? 'Valid format (starts with glc_)' : 'Invalid format',
+    token_masked: maskedToken,
+    auth_header_type: 'Basic',
+    example_header: `Basic ${Buffer.from(`${username}:${token.substring(0, 5)}...`).toString('base64')}`,
+    url: process.env.GRAFANA_CLOUD_PROMETHEUS_URL ? 
+      process.env.GRAFANA_CLOUD_PROMETHEUS_URL.substring(0, 30) + '...' : 'not-set'
+  });
+});
 
 // Test-only routes
 if (config.env === 'cypress') {
