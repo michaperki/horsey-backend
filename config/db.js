@@ -69,15 +69,35 @@ const setupMongooseMonitoring = () => {
   });
 };
 
+// Update in config/db.js
 const connectDB = async () => {
   try {
     // Setup monitoring before connecting
     setupMongooseMonitoring();
     
-    // Connect to MongoDB with enhanced logging
+    // Connect to MongoDB with enhanced logging and retries
     logger.info('Connecting to MongoDB', { uri: config.db.uri });
     
-    await mongoose.connect(config.db.uri, config.db.options);
+    // Add connection retry logic
+    let retries = 5;
+    while (retries) {
+      try {
+        await mongoose.connect(config.db.uri, {
+          ...config.db.options,
+          serverSelectionTimeoutMS: 10000, // Increase timeout
+          connectTimeoutMS: 10000, // Increase connection timeout
+        });
+        break; // Successfully connected
+      } catch (error) {
+        retries--;
+        if (retries === 0) throw error; // Rethrow if out of retries
+        logger.warn(`MongoDB connection attempt failed, retrying... (${retries} attempts left)`, { 
+          error: error.message 
+        });
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
     
     logger.info('MongoDB connected successfully', { 
       host: mongoose.connection.host,
@@ -103,4 +123,29 @@ const connectDB = async () => {
   }
 };
 
+// Add this function to handle MongoDB connection errors
+const setupMongooseConnectionHandlers = () => {
+  mongoose.connection.on('error', (err) => {
+    logger.error('MongoDB connection error', { error: err.message, stack: err.stack });
+  });
+  
+  mongoose.connection.on('disconnected', () => {
+    logger.warn('MongoDB disconnected, attempting to reconnect');
+  });
+  
+  // Handle process termination
+  process.on('SIGINT', async () => {
+    try {
+      await mongoose.connection.close();
+      logger.info('MongoDB connection closed due to app termination');
+      process.exit(0);
+    } catch (err) {
+      logger.error('Error during MongoDB disconnection', { error: err.message });
+      process.exit(1);
+    }
+  });
+};
+
+// Call this function at the beginning of connectDB
+setupMongooseConnectionHandlers();
 module.exports = connectDB;
