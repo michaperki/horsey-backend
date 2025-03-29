@@ -1,10 +1,8 @@
-// Fix for middleware/prometheusMiddleware.js - Correctly format Prometheus metrics for Grafana Cloud
+// Modified prometheusMiddleware.js to disable direct pushing to Grafana Cloud
+// and focus on exposing metrics via the /metrics endpoint
 
 const promClient = require('prom-client');
 const logger = require('../utils/logger');
-const https = require('https');
-const http = require('http');
-const zlib = require('zlib');
 
 // Create a Registry to register metrics
 const register = new promClient.Registry();
@@ -21,9 +19,8 @@ let cronJobExecutions;
 let cronJobDuration;
 let trackedBetsGauge;
 
-// Remote write settings
-const PUSH_INTERVAL_MS = 15000; // 15 seconds
-let lastPushTime = 0;
+// Configure to disable direct pushing
+const ENABLE_DIRECT_PUSH = false;
 
 try {
   // Enable collection of default metrics
@@ -137,182 +134,6 @@ try {
 }
 
 /**
- * Manual HTTP request implementation since fetch is not available
- */
-function makeRequest(url, options, data) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const isHttps = urlObj.protocol === 'https:';
-    const requestModule = isHttps ? https : http;
-    
-    const requestOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (isHttps ? 443 : 80),
-      path: `${urlObj.pathname}${urlObj.search}`,
-      method: options.method || 'GET',
-      headers: options.headers || {}
-    };
-    
-    console.log(`Making ${requestOptions.method} request to ${urlObj.hostname}${urlObj.pathname}`);
-    
-    const req = requestModule.request(requestOptions, (res) => {
-      let responseData = '';
-      
-      res.on('data', (chunk) => {
-        responseData += chunk;
-      });
-      
-      res.on('end', () => {
-        resolve({
-          ok: res.statusCode >= 200 && res.statusCode < 300,
-          status: res.statusCode,
-          text: () => Promise.resolve(responseData),
-          json: () => Promise.resolve(JSON.parse(responseData))
-        });
-      });
-    });
-    
-    req.on('error', (error) => {
-      console.error(`Request error: ${error.message}`);
-      reject(error);
-    });
-    
-    if (data) {
-      req.write(data);
-    }
-    
-    req.end();
-  });
-}
-
-/**
- * Since we can't reliably implement the Prometheus remote_write protocol with Snappy compression
- * directly in this middleware, we'll use a simpler approach - sending plain text metrics
- * which is supported by some Grafana Cloud configurations.
- */
-async function prepareMetricsForGrafana() {
-  try {
-    // Get the metrics in the Prometheus text format
-    const metrics = await register.metrics();
-    
-    return {
-      data: metrics,
-      contentType: 'text/plain; version=0.0.4; charset=utf-8'
-    };
-  } catch (error) {
-    console.error(`Error preparing metrics: ${error.message}`);
-    throw error;
-  }
-}
-
-/**
- * Pushes metrics to Grafana Cloud Prometheus using service account token
- */
-async function pushMetricsToGrafana() {
-  // Debug logging
-  console.log('pushMetricsToGrafana called');
-  console.log(`GRAFANA_CLOUD_PROMETHEUS_URL exists: ${!!process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
-  console.log(`GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN exists: ${!!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`);
-  console.log(`GRAFANA_CLOUD_USERNAME exists: ${!!process.env.GRAFANA_CLOUD_USERNAME}`);
-  
-  // Check for service account token first, then fall back to username/key for backward compatibility
-  if (!process.env.GRAFANA_CLOUD_PROMETHEUS_URL || 
-      (!process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN && 
-       (!process.env.GRAFANA_CLOUD_USERNAME || !process.env.GRAFANA_CLOUD_API_KEY))) {
-    console.log('Missing Grafana Cloud configuration');
-    return { success: false, reason: 'Missing Grafana Cloud configuration' };
-  }
-
-  try {
-    // Rate limit pushes
-    const now = Date.now();
-    if (now - lastPushTime < PUSH_INTERVAL_MS) {
-      return { success: false, reason: 'Too soon since last push' };
-    }
-    lastPushTime = now;
-
-    // Get metrics and prepare for Grafana Cloud
-    const { data, contentType } = await prepareMetricsForGrafana();
-    console.log(`Metrics size: ${data.length} bytes`);
-    
-    // Determine authorization method
-    let authHeader;
-    let authMethod;
-    if (process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN) {
-      // Use basic auth with username and token
-      const username = process.env.GRAFANA_CLOUD_USERNAME || '2351791'; // Use the provided username or default to instance ID
-      authHeader = `Basic ${Buffer.from(`${username}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`;
-      authMethod = 'basic auth with service token';
-      console.log(`Using basic auth with username ${username} and service token`);
-    } else {
-      // Fall back to username/API key (legacy)
-      authHeader = `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_API_KEY}`).toString('base64')}`;
-      authMethod = 'username/API key';
-      console.log('Using username/API key for Grafana Cloud authentication');
-    }
-    
-    console.log(`Pushing metrics to: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
-    console.log(`Auth method: ${authMethod}`);
-    
-    // Make the request with proper content type
-    const response = await makeRequest(
-      process.env.GRAFANA_CLOUD_PROMETHEUS_URL, 
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': contentType,
-          'Content-Encoding': 'gzip',
-          'Authorization': authHeader
-        }
-      },
-      data
-    );
-    
-    console.log(`Response status: ${response.status}`);
-    
-    if (!response.ok) {
-      // Try to get the response text for better error details
-      let responseText = '';
-      try {
-        responseText = await response.text();
-      } catch (e) {
-        responseText = 'Could not read response body';
-      }
-      console.log(`Error response: ${responseText}`);
-      throw new Error(`HTTP error! Status: ${response.status}, Response: ${responseText}`);
-    }
-    
-    // Success log
-    console.log('Metrics push successful!');
-    logger.debug('Metrics pushed to Grafana Cloud successfully', {
-      size: data.length,
-      statusCode: response.status
-    });
-    
-    return { success: true };
-  } catch (error) {
-    // Enhanced error logging
-    console.error(`Error pushing metrics to Grafana Cloud: ${error.message}`);
-    console.error(`Error stack: ${error.stack}`);
-    
-    logger.error('Error pushing metrics to Grafana Cloud', { 
-      error: error.message, 
-      stack: error.stack 
-    });
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Force push metrics regardless of time throttling
- */
-async function forcePushMetricsToGrafana() {
-  // Reset the last push time to ensure we can push
-  lastPushTime = 0;
-  return await pushMetricsToGrafana();
-}
-
-/**
  * Middleware to collect HTTP metrics
  */
 const httpMetricsMiddleware = (req, res, next) => {
@@ -361,18 +182,6 @@ const httpMetricsMiddleware = (req, res, next) => {
           },
           durationMs
         );
-
-        // Try to push metrics if we're in production
-        if (process.env.NODE_ENV === 'production' && 
-            process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
-          // Only push metrics occasionally based on a sampling rate
-          // to avoid too many requests during high traffic
-          if (Math.random() < 0.1) { // 10% sampling rate
-            pushMetricsToGrafana().catch(err => {
-              logger.warn('Background metrics push failed', { error: err.message });
-            });
-          }
-        }
       } catch (error) {
         // Don't let metrics collection break the app
         logger.warn('Error recording HTTP metrics', { error: error.message });
@@ -392,14 +201,6 @@ const httpMetricsMiddleware = (req, res, next) => {
 const metricsHandler = async (req, res) => {
   try {
     console.log('Metrics endpoint hit');
-    // If we're in production and Grafana Cloud is configured,
-    // push metrics when the endpoint is hit to ensure fresh data
-    if (process.env.NODE_ENV === 'production' && 
-        process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
-      console.log('Attempting to push metrics from endpoint handler');
-      await forcePushMetricsToGrafana();
-    }
-
     const metrics = await register.metrics();
     console.log(`Returning ${metrics.length} bytes of metrics data`);
     res.set('Content-Type', register.contentType);
@@ -429,25 +230,10 @@ const metricsDebugHandler = async (req, res) => {
         count: Object.keys(register.getSingleMetric()).length,
         size: metrics.length,
         sample: metrics.substring(0, 200) + '...',
-      }
+      },
+      metricsPushingEnabled: ENABLE_DIRECT_PUSH,
+      note: "Direct metrics pushing is disabled. Use Grafana Agent or a similar collector to scrape metrics from the /metrics endpoint."
     };
-
-    // Try pushing metrics
-    if (process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
-      try {
-        result.pushAttempt = await forcePushMetricsToGrafana();
-      } catch (pushError) {
-        result.pushAttempt = { 
-          success: false, 
-          error: pushError.message 
-        };
-      }
-    } else {
-      result.pushAttempt = { 
-        success: false, 
-        reason: 'No Grafana Cloud URL configured' 
-      };
-    }
 
     res.json(result);
   } catch (error) {
@@ -458,49 +244,23 @@ const metricsDebugHandler = async (req, res) => {
   }
 };
 
-// Setup automatic push for production
+// Log information about metrics pushing
 if (process.env.NODE_ENV === 'production' && 
-    process.env.GRAFANA_CLOUD_PROMETHEUS_URL) {
+    process.env.GRAFANA_CLOUD_PROMETHEUS_URL && 
+    ENABLE_DIRECT_PUSH) {
   
   console.log('Setting up automatic metrics push');
+  logger.info('Grafana Cloud metrics push enabled');
+  // The actual push code is now disabled
   
-  // Start periodic push to Grafana Cloud
-  const pushInterval = setInterval(async () => {
-    try {
-      console.log('Executing scheduled metrics push');
-      await pushMetricsToGrafana();
-    } catch (err) {
-      console.error(`Scheduled metrics push failed: ${err.message}`);
-      logger.error('Scheduled metrics push failed', { error: err.message });
-    }
-  }, PUSH_INTERVAL_MS);
-  
-  // Force an initial push
-  setTimeout(async () => {
-    try {
-      console.log('Executing initial metrics push');
-      await pushMetricsToGrafana();
-    } catch (err) {
-      console.error(`Initial metrics push failed: ${err.message}`);
-    }
-  }, 5000);
-  
-  // Ensure clean shutdown
-  process.on('SIGTERM', () => {
-    console.log('Received SIGTERM, cleaning up metrics push interval');
-    clearInterval(pushInterval);
-  });
-  
-  const authMethod = process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN ? 'service account token' : 'username/API key';
-  logger.info('Grafana Cloud metrics push enabled', {
-    intervalMs: PUSH_INTERVAL_MS,
-    endpoint: process.env.GRAFANA_CLOUD_PROMETHEUS_URL.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@'),
-    authMethod
-  });
-  
-  console.log(`Grafana Cloud metrics push enabled (${authMethod})`);
-  console.log(`Push interval: ${PUSH_INTERVAL_MS}ms`);
+  console.log(`Grafana Cloud metrics push enabled`);
   console.log(`Endpoint: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL.substring(0, 30)}...`);
+} else {
+  console.log('Direct metrics pushing to Grafana Cloud is disabled.');
+  logger.info('Direct metrics pushing to Grafana Cloud is disabled. Metrics are still collected and exposed at the /metrics endpoint.', {
+    metricsEndpoint: '/metrics',
+    directPushEnabled: ENABLE_DIRECT_PUSH
+  });
 }
 
 // Export the middleware and metrics
@@ -508,8 +268,6 @@ module.exports = {
   httpMetricsMiddleware,
   metricsHandler,
   metricsDebugHandler,
-  pushMetricsToGrafana,
-  forcePushMetricsToGrafana,
   register,
   metrics: {
     register,
