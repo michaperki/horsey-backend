@@ -1,4 +1,4 @@
-// utils/logger.js - Optimized for less verbosity
+// utils/logger.js - Enhanced with Grafana Loki integration
 const winston = require('winston');
 const fs = require('fs');
 const path = require('path');
@@ -73,6 +73,69 @@ if (configEnv !== 'production') {
       format: consoleFormat,
     })
   );
+}
+
+// Setup Loki transport if in production and configured
+if (configEnv === 'production') {
+  // Dynamically import winston-loki
+  try {
+    // We use require here since we want it to fail fast if missing
+    const { LokiTransport } = require('winston-loki');
+    
+    // Check if Grafana Cloud Loki is configured (service account token first, fallback to username/API key)
+    if (process.env.GRAFANA_CLOUD_LOKI_URL) {
+      if (process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN) {
+        // Use service account token (recommended)
+        logger.add(new LokiTransport({
+          host: process.env.GRAFANA_CLOUD_LOKI_URL,
+          headers: {
+            'Authorization': `Bearer ${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`
+          },
+          labels: { 
+            app: 'horsey-backend', 
+            env: configEnv,
+            host: process.env.DYNO || process.env.HOSTNAME || 'unknown',
+            service: 'chess-betting-service'
+          },
+          json: true,
+          format: winston.format.json(),
+          replaceTimestamp: true,
+          onConnectionError: (err) => {
+            console.error('Error connecting to Loki:', err);
+          }
+        }));
+        
+        console.log('Grafana Loki transport initialized with service account token');
+      } 
+      else if (process.env.GRAFANA_CLOUD_USERNAME && process.env.GRAFANA_CLOUD_API_KEY) {
+        // Fall back to username/API key (legacy)
+        logger.add(new LokiTransport({
+          host: process.env.GRAFANA_CLOUD_LOKI_URL,
+          basicAuth: `${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_API_KEY}`,
+          labels: { 
+            app: 'horsey-backend', 
+            env: configEnv,
+            host: process.env.DYNO || process.env.HOSTNAME || 'unknown',
+            service: 'chess-betting-service'
+          },
+          json: true,
+          format: winston.format.json(),
+          replaceTimestamp: true,
+          onConnectionError: (err) => {
+            console.error('Error connecting to Loki:', err);
+          }
+        }));
+        
+        console.log('Grafana Loki transport initialized with username/API key');
+      }
+      else {
+        console.warn('Grafana Loki URL configured but missing authentication credentials');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to initialize Loki transport. Did you install winston-loki?', error.message);
+    // Continue without Loki - application will still log to files
+  }
 }
 
 // Add exception handling
