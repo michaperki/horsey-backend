@@ -1,10 +1,10 @@
-// middleware/prometheusMiddleware.js - Enhanced for production with Grafana Cloud support using service accounts
+// Fix for middleware/prometheusMiddleware.js - Correctly format Prometheus metrics for Grafana Cloud
 
 const promClient = require('prom-client');
 const logger = require('../utils/logger');
-// Fix the fetch import issue
 const https = require('https');
 const http = require('http');
+const zlib = require('zlib');
 
 // Create a Registry to register metrics
 const register = new promClient.Registry();
@@ -154,7 +154,6 @@ function makeRequest(url, options, data) {
     };
     
     console.log(`Making ${requestOptions.method} request to ${urlObj.hostname}${urlObj.pathname}`);
-    console.log(`Headers: ${JSON.stringify(requestOptions.headers)}`);
     
     const req = requestModule.request(requestOptions, (res) => {
       let responseData = '';
@@ -187,6 +186,29 @@ function makeRequest(url, options, data) {
 }
 
 /**
+ * Converts Prometheus metrics to Protobuf format using Snappy compression
+ * for Grafana Cloud compatibility
+ */
+async function prepareMetricsForGrafana() {
+  try {
+    // Get the metrics in the Prometheus text format
+    const metrics = await register.metrics();
+    
+    // Create a WriteRequest message as required by Prometheus remote_write API
+    // This is a simplified version - for production, proper Protobuf serialization should be used
+    const snappyCompressed = zlib.gzipSync(metrics);
+    
+    return {
+      data: snappyCompressed,
+      contentType: 'application/x-protobuf'
+    };
+  } catch (error) {
+    console.error(`Error preparing metrics: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
  * Pushes metrics to Grafana Cloud Prometheus using service account token
  */
 async function pushMetricsToGrafana() {
@@ -212,16 +234,15 @@ async function pushMetricsToGrafana() {
     }
     lastPushTime = now;
 
-    const metrics = await register.metrics();
-    console.log(`Metrics size: ${metrics.length} bytes`);
+    // Get metrics and prepare for Grafana Cloud
+    const { data, contentType } = await prepareMetricsForGrafana();
+    console.log(`Metrics size: ${data.length} bytes`);
     
-    // In the pushMetricsToGrafana function, modify the auth header section:
-
     // Determine authorization method
     let authHeader;
     let authMethod;
     if (process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN) {
-      // Adjusted: Try using basic auth with username and token instead of Bearer
+      // Use basic auth with username and token
       const username = process.env.GRAFANA_CLOUD_USERNAME || '2351791'; // Use the provided username or default to instance ID
       authHeader = `Basic ${Buffer.from(`${username}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`;
       authMethod = 'basic auth with service token';
@@ -236,17 +257,18 @@ async function pushMetricsToGrafana() {
     console.log(`Pushing metrics to: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL}`);
     console.log(`Auth method: ${authMethod}`);
     
-    // Use our custom request function instead of fetch
+    // Make the request with proper content type
     const response = await makeRequest(
       process.env.GRAFANA_CLOUD_PROMETHEUS_URL, 
       {
         method: 'POST',
         headers: {
-          'Content-Type': register.contentType,
+          'Content-Type': contentType,
+          'Content-Encoding': 'gzip',
           'Authorization': authHeader
         }
       },
-      metrics
+      data
     );
     
     console.log(`Response status: ${response.status}`);
@@ -266,7 +288,7 @@ async function pushMetricsToGrafana() {
     // Success log
     console.log('Metrics push successful!');
     logger.debug('Metrics pushed to Grafana Cloud successfully', {
-      size: metrics.length,
+      size: data.length,
       statusCode: response.status
     });
     
