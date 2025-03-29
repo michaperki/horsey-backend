@@ -1,13 +1,16 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
-const config = require('./config');  // New config import
-
-// Import logger and logging middleware
+const config = require('./config');
 const logger = require('./utils/logger');
 const { httpLogger, detailedRequestLogger } = require('./middleware/httpLoggerMiddleware');
+const { httpMetricsMiddleware, metricsHandler } = require('./middleware/prometheusMiddleware');
+
+// Import auth middleware for protecting metrics endpoint
+const { authenticateToken, authorizeRole } = require('./middleware/authMiddleware');
 
 // Import error handling middleware
 const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware');
@@ -27,10 +30,14 @@ const testEmailRoutes = require('./routes/testEmail');
 const resetDatabaseRoutes = require('./routes/resetDatabase');
 const testUtilsRoutes = require('./routes/testUtils');
 const notificationRoutes = require('./routes/notification');
+const healthRoutes = require('./routes/health');
 
 const app = express();
 
-// Simple HTTP request logging middleware
+// Add HTTP metrics collection middleware
+app.use(httpMetricsMiddleware);
+
+// Add simple HTTP request logging
 app.use(httpLogger);
 
 // Configure security headers with Helmet
@@ -50,7 +57,7 @@ app.use(
   })
 );
 
-// Use allowed origins from config for CORS
+// CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || config.cors.allowedOrigins.includes(origin)) {
@@ -72,27 +79,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// Detailed request/response logging middleware
+// Detailed request/response logging
 app.use(detailedRequestLogger);
 
-// Session Middleware using config values
+// Session Middleware
 app.use(session({
   secret: config.session.secret,
   resave: false,
   saveUninitialized: true,
-  cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    sameSite: 'lax'
-  },
+  cookie: config.session.cookie
 }));
 
-// Simple health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// Monitoring routes - these should be excluded from rate limiting
+app.use('/health', healthRoutes);
 
-// Apply general API rate limiter
+// Metrics endpoint - protected by authentication and admin authorization
+app.get('/metrics', authenticateToken, authorizeRole('admin'), metricsHandler);
+
+// Apply general API rate limiter to all routes
 app.use(apiLimiter);
 
 // Routes with specific rate limiters
@@ -119,12 +123,12 @@ app.use('/leaderboard', leaderboardRoutes);
 app.use('/notifications', notificationRoutes);
 
 // Test-only routes
-if (process.env.NODE_ENV === 'cypress') {
+if (config.env === 'cypress') {
   app.use('/test', testUtilsRoutes);
   logger.info("Test utility routes added");
 }
 
-if (process.env.NODE_ENV !== 'production') {
+if (config.env !== 'production') {
   app.use('/reset-database', resetDatabaseRoutes);
 }
 
@@ -140,3 +144,4 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 module.exports = app;
+

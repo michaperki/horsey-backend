@@ -4,49 +4,32 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const { getStats } = require('./services/statsService');
-const { AuthenticationError } = require('./utils/errorTypes');
 const logger = require('./utils/logger');
+const { metrics } = require('./middleware/prometheusMiddleware');
 
 dotenv.config();
 
 let ioInstance;
 
-/**
- * Broadcasts platform statistics to all connected clients
- * @param {Object} io - Socket.io server instance
- */
 const broadcastStats = async (io) => {
-  try {
-    const onlineUsers = io.sockets.sockets.size;
-    const stats = await getStats(onlineUsers);
-    io.emit("liveStats", stats);
-  } catch (error) {
-    logger.error('Error broadcasting stats', { error: error.message, stack: error.stack });
-  }
+  const onlineUsers = io.sockets.sockets.size;
+  
+  // Update active users gauge in Prometheus metrics
+  metrics.activeUsersGauge.set(onlineUsers);
+  
+  const stats = await getStats(onlineUsers);
+  io.emit("liveStats", stats);
 };
 
-/**
- * Initializes Socket.io with authentication and event handlers
- * @param {Object} server - HTTP server instance
- * @returns {Object} - Configured Socket.io instance
- */
 const initializeSocket = (server) => {
-  // Define allowed origins based on environment
-  const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? [
-        'https://horsey-chess.netlify.app',
-        'https://horsey-dd32bf69ae0e.herokuapp.com'
-      ]
-    : [
-        'http://localhost:3000',
-        'http://localhost:5000',
-        'http://localhost:5000/'
-      ];
-
-  // Create Socket.io server with CORS configuration
   const io = new Server(server, {
     cors: {
-      origin: allowedOrigins,
+      origin: [
+        'http://localhost:3000',
+        'http://localhost:5000',
+        'https://horsey-chess.netlify.app',
+        'https://horsey-dd32bf69ae0e.herokuapp.com',
+      ],
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -54,88 +37,159 @@ const initializeSocket = (server) => {
 
   ioInstance = io;
 
-  // Authentication middleware
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     const ip = socket.handshake.address;
-    logger.info('Socket.io connection attempt', { ip });
+    logger.debug(`Socket.io connection attempt`, { ip, socketId: socket.id });
 
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         socket.user = decoded;
-        logger.info('Authentication successful', { userId: socket.user.id });
-        next();
+        logger.info(`Socket authentication successful`, { 
+          userId: socket.user.id, 
+          socketId: socket.id 
+        });
       } catch (err) {
-        logger.error('Authentication failed', { ip, error: err.message });
-        next(new AuthenticationError('Authentication error: Invalid token'));
+        logger.warn(`Socket authentication failed`, { 
+          ip, 
+          socketId: socket.id,
+          error: err.message 
+        });
+        return next(new Error('Authentication error: Invalid token'));
       }
     } else {
-      logger.info('No token provided, allowing guest connection', { ip });
+      logger.debug(`Guest socket connection`, { ip, socketId: socket.id });
       socket.user = { id: `guest-${Math.random().toString(36).substring(2, 9)}` };
-      next();
     }
+    next();
   });
 
-  // Connection event handler
   io.on('connection', async (socket) => {
-    logger.info('User connected', { userId: socket.user.id, socketId: socket.id });
+    logger.info(`Socket connected`, { 
+      userId: socket.user.id, 
+      socketId: socket.id 
+    });
     
-    // Join user-specific room for targeted messages
     socket.join(socket.user.id);
 
-    // Send initial stats to the new client
+    // Update active users gauge in Prometheus metrics
     const onlineUsers = io.sockets.sockets.size;
-    socket.emit("liveStats", await getStats(onlineUsers));
+    metrics.activeUsersGauge.set(onlineUsers);
+    
+    // Emit current stats to the newly connected client
+    const stats = await getStats(onlineUsers);
+    socket.emit("liveStats", stats);
 
-    // Handle client requests for live stats
+    // Broadcast updated stats to all clients
+    await broadcastStats(io);
+
     socket.on("getLiveStats", async () => {
+      logger.debug(`getLiveStats requested`, { 
+        userId: socket.user.id, 
+        socketId: socket.id 
+      });
+      
       socket.emit("liveStats", await getStats(io.sockets.sockets.size));
     });
 
-    // Broadcast updated stats to all clients on new connection
-    await broadcastStats(io);
-
-    // Handle client events
     socket.on('client_event', (data) => {
-      logger.info('Received client_event', { userId: socket.user.id, data });
+      logger.debug(`Received client_event`, { 
+        userId: socket.user.id,
+        socketId: socket.id,
+        eventData: data
+      });
     });
 
-    // Handle game finished events
-    socket.on('gameFinished', async () => {
+    socket.on('gameFinished', async (data) => {
+      logger.info(`Game finished event`, { 
+        userId: socket.user.id,
+        socketId: socket.id,
+        gameData: data
+      });
+      
+      // Increment game finished counter in Prometheus metrics
+      metrics.betOperationsTotal.inc({
+        operation: 'game_finished',
+        status: data?.outcome || 'unknown',
+        currency_type: data?.currencyType || 'unknown'
+      });
+      
       await broadcastStats(io);
     });
 
-    // Handle disconnecting event
+    socket.on('betPlaced', (data) => {
+      logger.info(`Bet placed event`, { 
+        userId: socket.user.id,
+        socketId: socket.id,
+        betData: data
+      });
+      
+      // Increment bet placed counter in Prometheus metrics
+      metrics.betOperationsTotal.inc({
+        operation: 'place',
+        status: 'success',
+        currency_type: data?.currencyType || 'unknown'
+      });
+    });
+    
+    socket.on('betAccepted', (data) => {
+      logger.info(`Bet accepted event`, { 
+        userId: socket.user.id,
+        socketId: socket.id,
+        betData: data
+      });
+      
+      // Increment bet accepted counter in Prometheus metrics
+      metrics.betOperationsTotal.inc({
+        operation: 'accept',
+        status: 'success',
+        currency_type: data?.currencyType || 'unknown'
+      });
+    });
+
     socket.on('disconnecting', () => {
-      logger.info('User disconnecting', { userId: socket.user.id, rooms: [...socket.rooms] });
+      const rooms = Array.from(socket.rooms);
+      logger.debug(`Socket disconnecting`, { 
+        userId: socket.user.id, 
+        socketId: socket.id,
+        rooms
+      });
     });
 
-    // Handle disconnect event
     socket.on('disconnect', async (reason) => {
-      logger.info('User disconnected', { userId: socket.user.id, reason });
+      logger.info(`Socket disconnected`, { 
+        userId: socket.user.id, 
+        socketId: socket.id,
+        reason
+      });
+      
+      // Update active users gauge in Prometheus metrics
+      metrics.activeUsersGauge.set(io.sockets.sockets.size);
+      
       await broadcastStats(io);
     });
 
-    // Handle socket errors
     socket.on('error', (error) => {
-      logger.error('Error on socket', { socketId: socket.id, userId: socket.user.id, error: error.message });
+      logger.error(`Socket error`, { 
+        userId: socket.user.id, 
+        socketId: socket.id,
+        error: error.message,
+        stack: error.stack
+      });
     });
   });
 
-  // Handle global Socket.io errors
   io.on('error', (error) => {
-    logger.error('Global Socket.io error', { error: error.message });
+    logger.error(`Global Socket.io error`, { 
+      error: error.message,
+      stack: error.stack
+    });
   });
 
   return io;
 };
 
-/**
- * Returns the Socket.io instance
- * @returns {Object} Socket.io instance
- * @throws {Error} If Socket.io is not initialized
- */
 const getIO = () => {
   if (!ioInstance) {
     throw new Error('Socket.io not initialized!');
