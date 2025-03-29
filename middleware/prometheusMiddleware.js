@@ -1,7 +1,15 @@
-// prometheusMiddleware.js with improved error handling for the PushGateway
-
+// Updated prometheusMiddleware.js for Grafana Cloud
 const promClient = require('prom-client');
+const axios = require('axios');
 const logger = require('../utils/logger');
+
+// Try to load snappy compression
+let snappy;
+try {
+  snappy = require('snappy');
+} catch (error) {
+  console.warn('Snappy compression not available. Metrics pushing will be disabled.');
+}
 
 // Create a Registry to register metrics
 const register = new promClient.Registry();
@@ -18,8 +26,8 @@ let cronJobExecutions;
 let cronJobDuration;
 let trackedBetsGauge;
 
-// Configure to enable direct pushing
-const ENABLE_DIRECT_PUSH = true;
+// Configure metrics pushing
+const ENABLE_DIRECT_PUSH = snappy ? true : false;
 
 try {
   // Enable collection of default metrics
@@ -226,11 +234,12 @@ const metricsDebugHandler = async (req, res) => {
         GRAFANA_CLOUD_USERNAME_exists: !!process.env.GRAFANA_CLOUD_USERNAME,
       },
       metrics: {
-        count: Object.keys(register.getSingleMetric()).length,
+        count: register.getMetricsAsArray().length,
         size: metrics.length,
         sample: metrics.substring(0, 200) + '...',
       },
       metricsPushingEnabled: ENABLE_DIRECT_PUSH,
+      snappyAvailable: !!snappy,
       note: ENABLE_DIRECT_PUSH 
         ? "Direct metrics pushing is enabled. Metrics are being sent to Grafana Cloud every 60 seconds."
         : "Direct metrics pushing is disabled. Use Grafana Agent or a similar collector to scrape metrics from the /metrics endpoint."
@@ -245,123 +254,52 @@ const metricsDebugHandler = async (req, res) => {
   }
 };
 
-// Log information about metrics pushing
+// Initialize metrics pushing if enabled
 if (process.env.NODE_ENV === 'production' && 
     process.env.GRAFANA_CLOUD_PROMETHEUS_URL && 
     ENABLE_DIRECT_PUSH) {
   
-  console.log('Setting up automatic metrics push');
+  console.log('Setting up metrics pushing via HTTP...');
   
-  // Safely create the gateway with error handling
-  let gateway;
-  try {
-    console.log('Initializing PushGateway...');
-    
-    // Check if PushGateway is available in this version of prom-client
-    if (typeof promClient.PushGateway !== 'function') {
-      console.error('PushGateway not available in this version of prom-client');
-      logger.error('PushGateway not available in this version of prom-client. Metrics will not be pushed.');
-    } else {
-      gateway = new promClient.PushGateway(
-        process.env.GRAFANA_CLOUD_PROMETHEUS_URL,
+  // Function to push metrics to Grafana Cloud
+  const pushMetrics = async () => {
+    try {
+      console.log('Preparing to push metrics to Grafana Cloud...');
+      
+      // Get metrics in text format
+      const metricsData = await register.metrics();
+      
+      // Make the request to the Cortex API using Basic auth
+      const url = process.env.GRAFANA_CLOUD_PROMETHEUS_URL.replace('/api/prom/push', '/api/prom/metrics');
+      
+      // This endpoint accepts plain text metrics
+      const response = await axios.post(
+        url,
+        metricsData,
         {
           headers: {
-            Authorization: `Bearer ${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`
+            'Content-Type': 'text/plain',
+            'Authorization': `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`
           }
         }
       );
-      console.log('PushGateway initialized successfully');
-    }
-  } catch (error) {
-    console.error('Failed to initialize PushGateway:', error.message);
-    logger.error('Failed to initialize PushGateway', { error: error.message, stack: error.stack });
-    // Continue without pushing metrics
-  }
-  
-  // Only set up interval if gateway was created successfully
-  if (gateway) {
-    const pushMetrics = () => {
-      try {
-        console.log('Pushing metrics to Grafana Cloud...');
-        gateway.push(
-          { jobName: 'horsey-backend-metrics' },
-          register,
-          (err, resp, body) => {
-            if (err) {
-              console.error('Error pushing metrics to Grafana Cloud:', err.message);
-              logger.error('Error pushing metrics to Grafana Cloud', { error: err.message });
-            } else {
-              console.log('Metrics pushed successfully');
-              logger.info('Metrics pushed successfully to Grafana Cloud');
-            }
-          }
-        );
-      } catch (error) {
-        console.error('Error during metrics push:', error.message);
-        logger.error('Error during metrics push', { error: error.message, stack: error.stack });
-      }
-    };
-    
-    // Push metrics immediately on startup
-    setTimeout(pushMetrics, 5000);
-    
-    // Then set up interval for regular pushing
-    setInterval(pushMetrics, 60000);
-  } else {
-    // Fallback to axios-based pushing if gateway creation failed
-    try {
-      const axios = require('axios');
-      console.log('Using axios fallback for metrics pushing');
       
-      const pushMetricsWithAxios = async () => {
-        try {
-          console.log('Preparing to push metrics with axios...');
-          const metrics = await register.metrics();
-          
-          // Log first part of metrics for debugging
-          console.log('Metrics sample:', metrics.substring(0, 200) + '...');
-          
-          // For Prometheus text format
-          const response = await axios.post(
-            process.env.GRAFANA_CLOUD_PROMETHEUS_URL,
-            metrics,
-            {
-              headers: {
-                'Content-Type': 'text/plain', // Use text/plain for Prometheus text format
-                'Authorization': `Basic ${Buffer.from(`${process.env.GRAFANA_CLOUD_USERNAME}:${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`).toString('base64')}`
-              }
-            }
-          );
-          
-          console.log('Metrics pushed successfully with axios', response.status);
-          logger.info('Metrics pushed successfully with axios', { status: response.status });
-        } catch (error) {
-          console.error('Error pushing metrics with axios:', 
-            error.response ? `${error.response.status} - ${error.response.statusText}` : error.message);
-          
-          // Log more detailed error information
-          if (error.response && error.response.data) {
-            console.error('Error response data:', error.response.data);
-          }
-          
-          logger.error('Error pushing metrics with axios', { 
-            status: error.response?.status,
-            error: error.message,
-            data: error.response?.data
-          });
-        }
-      };
-      
-      // Push metrics immediately on startup
-      setTimeout(pushMetricsWithAxios, 5000);
-      
-      // Then set up interval for regular pushing
-      setInterval(pushMetricsWithAxios, 60000);
+      console.log('Metrics pushed successfully', response.status);
     } catch (error) {
-      console.error('Failed to set up metrics pushing with axios:', error.message);
-      logger.error('Failed to set up metrics pushing with axios', { error: error.message });
+      console.error('Error pushing metrics to Grafana Cloud:', 
+        error.response ? `${error.response.status} - ${error.response.statusText}` : error.message);
+      
+      if (error.response && error.response.data) {
+        console.error('Error response data:', error.response.data);
+      }
     }
-  }
+  };
+  
+  // Push metrics once after 5 seconds to allow app to fully initialize
+  setTimeout(pushMetrics, 5000);
+  
+  // Then set up interval for regular pushing
+  setInterval(pushMetrics, 60000);
 }
 
 // Export the middleware and metrics
