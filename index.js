@@ -9,6 +9,8 @@ const seedAdmin = require('./scripts/seedAdmin');
 const { startTrackingGames } = require('./cron/trackGames');
 const { startExpiringBets } = require('./cron/expireBets');
 const logger = require('./utils/logger');
+// This must be the first import in your application
+require('./telemetry');
 
 // Determine which .env file to use
 const envFile = process.env.NODE_ENV === 'test'
