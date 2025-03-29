@@ -140,6 +140,11 @@ app.use('/leaderboard', leaderboardRoutes);
 app.use('/notifications', notificationRoutes);
 
 // Add this route before your other metrics route
+app.get('/debug-grafana', (req, res) => {
+  const { metricsDebugHandler } = require('./middleware/prometheusMiddleware');
+  return metricsDebugHandler(req, res);
+});
+// Add this route before your other metrics route
 app.get('/debug-grafana', require('./middleware/prometheusMiddleware').metricsDebugHandler);
 
 
