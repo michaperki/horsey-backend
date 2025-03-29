@@ -20,7 +20,7 @@ let cronJobDuration;
 let trackedBetsGauge;
 
 // Configure to disable direct pushing
-const ENABLE_DIRECT_PUSH = false;
+const ENABLE_DIRECT_PUSH = true;
 
 try {
   // Enable collection of default metrics
@@ -232,7 +232,7 @@ const metricsDebugHandler = async (req, res) => {
         sample: metrics.substring(0, 200) + '...',
       },
       metricsPushingEnabled: ENABLE_DIRECT_PUSH,
-      note: "Direct metrics pushing is disabled. Use Grafana Agent or a similar collector to scrape metrics from the /metrics endpoint."
+      note: "Direct metrics pushing is enabled." 
     };
 
     res.json(result);
@@ -245,22 +245,37 @@ const metricsDebugHandler = async (req, res) => {
 };
 
 // Log information about metrics pushing
+// Add this in prometheusMiddleware.js where you check for GRAFANA_CLOUD_PROMETHEUS_URL
 if (process.env.NODE_ENV === 'production' && 
     process.env.GRAFANA_CLOUD_PROMETHEUS_URL && 
     ENABLE_DIRECT_PUSH) {
   
   console.log('Setting up automatic metrics push');
-  logger.info('Grafana Cloud metrics push enabled');
-  // The actual push code is now disabled
   
-  console.log(`Grafana Cloud metrics push enabled`);
-  console.log(`Endpoint: ${process.env.GRAFANA_CLOUD_PROMETHEUS_URL.substring(0, 30)}...`);
-} else {
-  console.log('Direct metrics pushing to Grafana Cloud is disabled.');
-  logger.info('Direct metrics pushing to Grafana Cloud is disabled. Metrics are still collected and exposed at the /metrics endpoint.', {
-    metricsEndpoint: '/metrics',
-    directPushEnabled: ENABLE_DIRECT_PUSH
-  });
+  // Create the gateway for pushing metrics
+  const gateway = new promClient.PushGateway(
+    process.env.GRAFANA_CLOUD_PROMETHEUS_URL,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.GRAFANA_CLOUD_SERVICE_ACCOUNT_TOKEN}`
+      }
+    }
+  );
+  
+  // Set up periodic pushing (every 60 seconds)
+  setInterval(() => {
+    gateway.push(
+      { jobName: 'horsey-backend-metrics' },
+      register,
+      (err, resp, body) => {
+        if (err) {
+          console.error('Error pushing metrics to Grafana Cloud:', err);
+        } else {
+          console.log('Metrics pushed successfully');
+        }
+      }
+    );
+  }, 60000);
 }
 
 // Export the middleware and metrics
