@@ -1,6 +1,4 @@
-
 // backend/index.js
-
 const http = require('http');
 const app = require('./server');
 const connectDB = require('./config/db');
@@ -9,6 +7,7 @@ const { initializeSocket } = require('./socket');
 const seedAdmin = require('./scripts/seedAdmin');
 const { startTrackingGames } = require('./cron/trackGames');
 const { startExpiringBets } = require('./cron/expireBets');
+const manageSeasons = require('./cron/manageSeasons');
 const logger = require('./utils/logger');
 
 // Load environment variables
@@ -66,6 +65,19 @@ async function startServer() {
       }
     }
     
+    // Initialize the first season if needed
+    try {
+      const { createInitialSeasonIfNeeded } = require('./services/seasonService');
+      await createInitialSeasonIfNeeded();
+      logger.info('Season initialization check completed');
+    } catch (error) {
+      logger.error('Error during season initialization check', { 
+        error: error.message, 
+        stack: error.stack 
+      });
+      // Non-critical, continue startup
+    }
+    
     // Start the server
     const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => {
@@ -76,7 +88,12 @@ async function startServer() {
         startTrackingGames();
         startExpiringBets();
         require('./cron/resetStats'); // schedules the reset stats job
-        logger.info('Cron jobs for tracking games, expiring bets, and resetting stats started.');
+        
+        // Run initial season management during startup
+        manageSeasons.performSeasonManagement();
+        logger.info('Initial season management performed successfully.');
+        
+        logger.info('Cron jobs for tracking games, expiring bets, resetting stats, and managing seasons started.');
       } catch (error) {
         logger.error('Error initializing cron jobs:', error.stack);
       }
@@ -105,4 +122,3 @@ process.on('SIGTERM', () => {
 startServer();
 
 module.exports = server;
-

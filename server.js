@@ -1,4 +1,3 @@
-
 // server.js
 const express = require('express');
 const cors = require('cors');
@@ -9,6 +8,8 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const { httpLogger, detailedRequestLogger } = require('./middleware/httpLoggerMiddleware');
 const { httpMetricsMiddleware, metricsHandler } = require('./middleware/prometheusMiddleware');
+
+const { performSeasonManagement } = require('./cron/manageSeasons');
 
 // Import auth middleware for protecting metrics endpoint
 const { authenticateToken, authorizeRole } = require('./middleware/authMiddleware');
@@ -32,6 +33,7 @@ const resetDatabaseRoutes = require('./routes/resetDatabase');
 const testUtilsRoutes = require('./routes/testUtils');
 const notificationRoutes = require('./routes/notification');
 const healthRoutes = require('./routes/health');
+const seasonRoutes = require('./routes/seasons');
 
 const app = express();
 logger.info('Initializing Express app');
@@ -153,6 +155,10 @@ app.use('/leaderboard', leaderboardRoutes);
 app.use('/notifications', notificationRoutes);
 logger.info('Miscellaneous routes registered.');
 
+// Add this line where the other routes are being registered (around line 230)
+app.use('/seasons', seasonRoutes);
+logger.info('Season routes registered.');
+
 // Test-only routes
 if (config.env === 'cypress') {
   app.use('/test', testUtilsRoutes);
@@ -179,4 +185,3 @@ app.use(errorHandler);
 logger.info('Global error handler registered.');
 
 module.exports = app;
-

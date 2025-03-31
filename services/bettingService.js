@@ -7,12 +7,14 @@ const { getGameOutcome } = require('./lichessService');
 const { sendNotification } = require('./notificationService');
 const { ResourceNotFoundError, ExternalServiceError, DatabaseError } = require('../utils/errorTypes');
 const logger = require('../utils/logger');
+const seasonService = require('./seasonService');
 
 /**
  * Processes bets for a concluded game.
  * - Updates winner/loser balances
  * - Handles draw refunds
  * - Sends notifications with old/new balances
+ * - Updates season statistics
  */
 const processBetOutcome = async (gameId) => {
   // 1. Fetch outcome from Lichess
@@ -52,12 +54,19 @@ const processBetOutcome = async (gameId) => {
         bet.status = 'draw';
         bet.winnerId = null;
         await handleDraw(bet, whiteUser, blackUser, session);
+        
+        // Update season stats for draw
+        await seasonService.updateSeasonStatsOnDraw(bet, [whiteUser, blackUser]);
       } else {
         bet.status = 'won';
         // Determine winner based on final outcome
         const winner = outcome === 'white' ? whiteUser : blackUser;
+        const loser = outcome === 'white' ? blackUser : whiteUser;
         bet.winnerId = winner._id;
         await handleWin(bet, winner, session);
+        
+        // Update season stats for win/loss
+        await seasonService.updateSeasonStatsOnBetConcluded(bet, winner, loser);
       }
       await bet.save({ session });
     }
@@ -136,4 +145,3 @@ async function handleWin(bet, winner, session) {
 }
 
 module.exports = { processBetOutcome };
-

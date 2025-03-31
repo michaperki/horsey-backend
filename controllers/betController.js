@@ -1,4 +1,4 @@
-// backend/controllers/betController.js - Updated with error handling
+// backend/controllers/betController.js - Updated with season tracking
 
 const mongoose = require('mongoose');
 const Bet = require('../models/Bet');
@@ -7,6 +7,7 @@ const { getGameOutcome, createLichessGame, getUsernameFromAccessToken } = requir
 const { asyncHandler } = require('../middleware/errorMiddleware');
 const { ResourceNotFoundError, ValidationError, AuthorizationError, ExternalServiceError } = require('../utils/errorTypes');
 const logger = require('../utils/logger');
+const seasonService = require('../services/seasonService');
 
 /**
  * Helper function to check if a given game is open for betting.
@@ -181,6 +182,7 @@ const getAvailableSeekers = asyncHandler(async (req, res) => {
 
 /**
  * Places a new bet with an expiration time (e.g., 30 minutes).
+ * Updated to track season stats.
  */
 const placeBet = asyncHandler(async (req, res) => {
   const { colorPreference, amount, timeControl, variant, currencyType } = req.body;
@@ -251,6 +253,9 @@ const placeBet = asyncHandler(async (req, res) => {
     expiresAt: new Date(Date.now() + 30 * 60 * 1000),
   });
   await newBet.save();
+
+  // Track bet in season stats
+  await seasonService.updateSeasonStatsOnBetPlaced(newBet, user);
 
   logger.betEvent('created', newBet._id, creatorId, {
     amount,
@@ -496,4 +501,3 @@ const cancelBet = asyncHandler(async (req, res) => {
 });
 
 module.exports = { getBetHistory, getAvailableSeekers, placeBet, acceptBet, cancelBet };
-

@@ -3,17 +3,35 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Bet = require('../models/Bet');
+const SeasonStats = require('../models/SeasonStats');
 const { asyncHandler } = require('../middleware/errorMiddleware');
 const { DatabaseError } = require('../utils/errorTypes');
 const logger = require('../utils/logger');
+const seasonService = require('../services/seasonService');
 
 /**
  * GET /leaderboard
  * Retrieves the leaderboard data, including username, average rating, win percentage, and number of games.
+ * Updated to support both all-time and seasonal leaderboards.
  */
 const getLeaderboard = asyncHandler(async (req, res) => {
   try {
-    logger.info('Fetching leaderboard data');
+    const { type = 'all-time', currencyType = 'token', limit = 10, seasonId } = req.query;
+    
+    logger.info('Fetching leaderboard data', { type, currencyType });
+    
+    // If seasonal leaderboard requested, delegate to season service
+    if (type === 'season') {
+      const seasonLeaderboard = await seasonService.getSeasonLeaderboard(
+        seasonId, 
+        currencyType,
+        parseInt(limit, 10)
+      );
+      
+      return res.json(seasonLeaderboard);
+    }
+    
+    // Otherwise, fetch the all-time leaderboard (existing functionality)
     // Define the rating fields to consider
     const ratingFields = ['lichessRatings.bullet', 'lichessRatings.blitz', 'lichessRatings.rapid', 'lichessRatings.classical'];
 
@@ -31,6 +49,8 @@ const getLeaderboard = asyncHandler(async (req, res) => {
               '$lichessRatings.classical',
             ],
           },
+          tokenBalance: 1,
+          sweepstakesBalance: 1
         },
       },
       {
@@ -56,6 +76,7 @@ const getLeaderboard = asyncHandler(async (req, res) => {
                         { $eq: ['$opponentId', '$$userId'] },
                       ],
                     },
+                    { $eq: ['$currencyType', currencyType] }
                   ],
                 },
               },
@@ -87,6 +108,7 @@ const getLeaderboard = asyncHandler(async (req, res) => {
         $addFields: {
           totalGames: { $size: '$userBets' },
           wins: { $sum: '$userBets.isWin' },
+          balance: currencyType === 'token' ? '$tokenBalance' : '$sweepstakesBalance'
         },
       },
       {
@@ -104,12 +126,12 @@ const getLeaderboard = asyncHandler(async (req, res) => {
         },
       },
       {
-        // Sort by averageRating descending
-        $sort: { averageRating: -1 },
+        // Sort by the requested balance type
+        $sort: { balance: -1 },
       },
       {
         // Optionally limit the number of results (e.g., top 100)
-        $limit: 100,
+        $limit: parseInt(limit, 10),
       },
       {
         // Final projection
@@ -119,6 +141,7 @@ const getLeaderboard = asyncHandler(async (req, res) => {
           rating: { $round: ['$averageRating', 0] },
           winPercentage: 1,
           games: '$totalGames',
+          balance: 1
         },
       },
     ]);
@@ -132,4 +155,3 @@ const getLeaderboard = asyncHandler(async (req, res) => {
 });
 
 module.exports = { getLeaderboard };
-
