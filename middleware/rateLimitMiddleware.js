@@ -3,34 +3,14 @@ const rateLimit = require('express-rate-limit');
 const config = require('../config');
 
 /**
- * Creates and configures various rate limiters for different endpoints
- * Bypasses rate limiting in test/cypress environments
+ * Instantiate each limiter once at module load.
+ * We wrap them in a small bypass function for test/cypress envs.
  */
-
-// Helper function to create a rate limiter that bypasses tests
-const createRateLimiter = (options) => {
-  // Create a middleware that checks environment first
-  return (req, res, next) => {
-    // Skip rate limiting in test/cypress environment
-    if (process.env.NODE_ENV === 'cypress' || process.env.NODE_ENV === 'test') {
-      return next();
-    }
-    
-    // For non-test environments, apply the actual rate limiter
-    const limiter = rateLimit({
-      ...options,
-      standardHeaders: true,
-      legacyHeaders: false
-    });
-    
-    return limiter(req, res, next);
-  };
-};
-
-// General API limiter
-const apiLimiter = createRateLimiter({
+const apiRateLimiter = rateLimit({
   windowMs: config.rateLimit.api.windowMs,
   max: config.rateLimit.api.max,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     status: 'error',
     errorCode: 'RATE_LIMIT_EXCEEDED',
@@ -39,10 +19,11 @@ const apiLimiter = createRateLimiter({
   }
 });
 
-// More strict limiter for authentication endpoints
-const authLimiter = createRateLimiter({
+const authRateLimiter = rateLimit({
   windowMs: config.rateLimit.auth.windowMs,
   max: config.rateLimit.auth.max,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     status: 'error',
     errorCode: 'RATE_LIMIT_EXCEEDED',
@@ -51,10 +32,11 @@ const authLimiter = createRateLimiter({
   }
 });
 
-// Limiter for bet placement
-const betLimiter = createRateLimiter({
+const betRateLimiter = rateLimit({
   windowMs: config.rateLimit.bet.windowMs,
   max: config.rateLimit.bet.max,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     status: 'error',
     errorCode: 'RATE_LIMIT_EXCEEDED',
@@ -63,8 +45,18 @@ const betLimiter = createRateLimiter({
   }
 });
 
+/**
+ * Wrap a limiter so it skips in test/cypress environments.
+ */
+const bypassInTest = (limiter) => (req, res, next) => {
+  if (['test', 'cypress'].includes(process.env.NODE_ENV)) {
+    return next();
+  }
+  return limiter(req, res, next);
+};
+
 module.exports = {
-  apiLimiter,
-  authLimiter,
-  betLimiter
+  apiLimiter: bypassInTest(apiRateLimiter),
+  authLimiter: bypassInTest(authRateLimiter),
+  betLimiter: bypassInTest(betRateLimiter),
 };

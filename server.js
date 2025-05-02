@@ -19,6 +19,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorMiddleware'
 // Import rate limiting middleware
 const { apiLimiter, authLimiter, betLimiter } = require('./middleware/rateLimitMiddleware');
 
+
 // Import routes
 const adminAuthRoutes = require('./routes/adminAuth');
 const userAuthRoutes = require('./routes/userAuth');
@@ -34,6 +35,7 @@ const testUtilsRoutes = require('./routes/testUtils');
 const notificationRoutes = require('./routes/notification');
 const healthRoutes = require('./routes/health');
 const seasonRoutes = require('./routes/seasons');
+const gameRoutes = require('./routes/game');
 
 const app = express();
 logger.info('Initializing Express app');
@@ -158,6 +160,8 @@ logger.info('Miscellaneous routes registered.');
 // Add this line where the other routes are being registered (around line 230)
 app.use('/seasons', seasonRoutes);
 logger.info('Season routes registered.');
+
+app.use('/game', gameRoutes);
 
 // Test-only routes
 if (config.env === 'cypress') {

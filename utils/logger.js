@@ -1,3 +1,4 @@
+
 // utils/logger.js - Optimized for less verbosity
 const winston = require('winston');
 const fs = require('fs');
@@ -26,16 +27,12 @@ const consoleFormat = winston.format.combine(
   winston.format.timestamp({ format: 'HH:mm:ss' }),
   winston.format.colorize({ all: true }),
   winston.format.printf(({ level, message, timestamp, ...meta }) => {
-    // Only include essential metadata in console output
     const essentialMeta = {};
     if (meta.statusCode) essentialMeta.status = meta.statusCode;
     if (meta.responseTime) essentialMeta.time = `${meta.responseTime.toFixed(0)}ms`;
     if (meta.userId && meta.userId !== 'unauthenticated') essentialMeta.user = meta.userId;
-    
-    const metaStr = Object.keys(essentialMeta).length 
-      ? ` ${JSON.stringify(essentialMeta)}`
-      : '';
-      
+
+    const metaStr = Object.keys(essentialMeta).length ? ` ${JSON.stringify(essentialMeta)}` : '';
     return `[${timestamp}] ${level}: ${message}${metaStr}`;
   })
 );
@@ -60,8 +57,27 @@ const logger = winston.createLogger({
   format: fileFormat,
   defaultMeta: { service: 'chess-betting-service' },
   transports: [
-    new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
-    new winston.transports.File({ filename: path.join(logDir, 'combined.log') }),
+    new winston.transports.File({
+      filename: path.join(logDir, 'error.log'),
+      level: 'error',
+      handleExceptions: true
+    }),
+    new winston.transports.File({
+      filename: path.join(logDir, 'combined.log'),
+      handleExceptions: true
+    }),
+  ],
+  exceptionHandlers: [
+    new winston.transports.File({
+      filename: path.join(logDir, 'exceptions.log'),
+      handleExceptions: true
+    })
+  ],
+  rejectionHandlers: [
+    new winston.transports.File({
+      filename: path.join(logDir, 'rejections.log'),
+      handleExceptions: true
+    })
   ],
   exitOnError: false,
 });
@@ -71,19 +87,10 @@ if (configEnv !== 'production') {
   logger.add(
     new winston.transports.Console({
       format: consoleFormat,
+      handleExceptions: true
     })
   );
 }
-
-// Add exception handling
-logger.exceptions.handle(
-  new winston.transports.File({ filename: path.join(logDir, 'exceptions.log') })
-);
-
-// Add rejection handling
-logger.rejections.handle(
-  new winston.transports.File({ filename: path.join(logDir, 'rejections.log') })
-);
 
 // Helper to sanitize objects
 const sanitize = (obj) => {
@@ -140,8 +147,8 @@ logger.apiResponse = function(resInfo, meta = {}) {
 // Auth event logging helper
 logger.authEvent = function(type, userId, meta = {}) {
   try {
-    this.info(`Auth: ${type}`, { 
-      userId: userId || 'unauthenticated', 
+    this.info(`Auth: ${type}`, {
+      userId: userId || 'unauthenticated',
       ...sanitize(meta),
       type: 'auth_event'
     });
@@ -153,9 +160,9 @@ logger.authEvent = function(type, userId, meta = {}) {
 // Bet event logging helper
 logger.betEvent = function(type, betId, userId, meta = {}) {
   try {
-    this.info(`Bet: ${type}`, { 
-      betId, 
-      userId: userId || 'unauthenticated', 
+    this.info(`Bet: ${type}`, {
+      betId,
+      userId: userId || 'unauthenticated',
       ...sanitize(meta),
       type: 'bet_event'
     });
@@ -165,3 +172,4 @@ logger.betEvent = function(type, betId, userId, meta = {}) {
 };
 
 module.exports = logger;
+

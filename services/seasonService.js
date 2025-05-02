@@ -309,7 +309,7 @@ const getSeasonLeaderboard = async (seasonId = null, currencyType = 'token', lim
     
     // Aggregation pipeline to get leaderboard
     const leaderboard = await SeasonStats.aggregate([
-      { $match: { seasonId: mongoose.Types.ObjectId(seasonId) } },
+      { $match: { seasonId: new mongoose.Types.ObjectId(seasonId) } },
       { $sort: { [sortField]: -1 } },
       { $limit: limit },
       {

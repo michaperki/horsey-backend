@@ -5,6 +5,8 @@ const dotenv = require('dotenv');
 const { getStats } = require('./services/statsService');
 const logger = require('./utils/logger');
 const { metrics } = require('./middleware/prometheusMiddleware');
+const chessService = require('./services/chessService');
+const setupGameHandlers = require('./socket/setupGameHandlers');
 
 dotenv.config();
 
@@ -102,6 +104,9 @@ const initializeSocket = (server) => {
     // Broadcast updated stats to all clients
     await broadcastStats(io);
 
+    // Set up game handlers
+    setupGameHandlers(io, socket);
+
     socket.on("getLiveStats", async () => {
       logger.debug(`getLiveStats requested`, { 
         userId: socket.user.id, 
@@ -117,6 +122,38 @@ const initializeSocket = (server) => {
         socketId: socket.id,
         eventData: data
       });
+    });
+
+    // Legacy game events that will be replaced by the new implementation
+    socket.on('joinGame', ({ gameId }) => {
+      socket.join(gameId);
+      socket.emit('joinedGame', { gameId });
+    });
+
+    socket.on('startGame', ({ white, black }) => {
+      const { gameId, initialFen } = chessService.createGame(white, black);
+      socket.join(gameId);
+      io.to(gameId).emit('gameStarted', { gameId, initialFen });
+    });
+
+    socket.on('makeMove', ({ gameId, move }) => {
+      try {
+        const state = chessService.makeMove(gameId, move);
+        io.in(gameId).emit('moveMade', state);
+
+        // If game over, notify both players and upstream bet logic
+        if (state.gameOver) {
+          io.in(gameId).emit('gameOver', state);
+          io.emit('gameFinished', {
+            gameId,
+            outcome: state.outcome || null,
+            fen: state.fen,
+            pgn: state.pgn,
+          });
+        }
+      } catch (err) {
+        socket.emit('error', { error: err.message });
+      }
     });
 
     socket.on('gameFinished', async (data) => {
